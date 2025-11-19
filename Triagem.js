@@ -1,14 +1,17 @@
 // ==UserScript==
 // @name         TRIAGEM - SMAX SGS221
-// @namespace    huh
-// @version      3.2
-// @description  Teste 2.2 (organizado e renomeado)
-// @author       ADRIANO
+// @namespace    https://github.com/DanielMacCruz/SGS221-Triagem
+// @version      0.1
+// @description  Interface enhancements for triagem workflow
+// @author       YOU
 // @match        https://suporte.tjsp.jus.br/saw/*
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
-// @run-at       document-idle
-// @grant        GM_addStyle
+// @grant        GM.xmlHttpRequest
+// @grant        GM.setValue
+// @grant        GM.getValue
+// @grant        GM.addStyle
 // ==/UserScript==
+
 
 (() => {
   'use strict';
