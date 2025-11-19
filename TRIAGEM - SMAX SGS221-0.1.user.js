@@ -25,6 +25,9 @@
     collapseOn: false,
     enlargeCommentsOn: true,
     autoTagsOn: true,
+    flagSkullOn: true,
+    nameGroups: null, // will store custom name assignments
+    ausentes: null,   // will store absent colleagues
   };
 
     if (typeof GM_getValue === 'function') {
@@ -88,34 +91,108 @@
 
         const panel = document.createElement('div');
         panel.id = 'smax-settings';
-        Object.assign(panel.style, { position:'fixed', right:'12px', bottom:'54px', minWidth:'260px', zIndex:999999, padding:'10px', borderRadius:'8px', background:'#fff', boxShadow:'0 6px 18px rgba(0,0,0,.25)', display:'none' });
+        Object.assign(panel.style, { position:'fixed', right:'12px', bottom:'54px', maxWidth:'600px', maxHeight:'80vh', overflow:'auto', zIndex:999999, padding:'14px', borderRadius:'8px', background:'#fff', boxShadow:'0 6px 18px rgba(0,0,0,.25)', display:'none' });
+        
+        // Get current name groups and ausentes
+        const currentNames = prefs.nameGroups || NAME_GROUPS;
+        const currentAusentes = prefs.ausentes || AUSENTES;
+        
+        // Build the name groups editor HTML
+        let nameGroupsHTML = '';
+        for (const [name, digits] of Object.entries(currentNames)) {
+            nameGroupsHTML += `
+                <div style="margin-bottom:8px;">
+                    <label style="display:inline-block;width:120px;font-weight:600;">${name}:</label>
+                    <input type="text" class="smax-name-digits" data-name="${name}" value="${digits.join(',')}" 
+                           style="width:200px;padding:4px;border:1px solid #ccc;border-radius:3px;" 
+                           placeholder="0,1,2,3">
+                </div>`;
+        }
+        
         panel.innerHTML = `
-    <h4 style="margin:0 0 8px 0">SMAX — Settings</h4>
-    <label><input type="checkbox" id="smax-toggle-highlights"> Highlights</label><br>
-    <label><input type="checkbox" id="smax-toggle-namebadges"> Name badges</label><br>
-    <label><input type="checkbox" id="smax-toggle-magistrado"> Magistrado highlight</label><br>
-    <label><input type="checkbox" id="smax-toggle-skull"> Skull alerts</label><br>
-    <div style="margin-top:8px; text-align:right;"><button id="smax-save">Save</button></div>
+    <h4 style="margin:0 0 12px 0;border-bottom:2px solid #222;padding-bottom:6px;">SMAX — Settings</h4>
+    
+    <div style="margin-bottom:16px;">
+        <h5 style="margin:0 0 8px 0;">Features</h5>
+        <label style="display:block;margin-bottom:4px;"><input type="checkbox" id="smax-toggle-highlights"> Highlights</label>
+        <label style="display:block;margin-bottom:4px;"><input type="checkbox" id="smax-toggle-namebadges"> Name badges</label>
+        <label style="display:block;margin-bottom:4px;"><input type="checkbox" id="smax-toggle-magistrado"> Magistrado highlight</label>
+        <label style="display:block;margin-bottom:4px;"><input type="checkbox" id="smax-toggle-skull"> Skull alerts</label>
+    </div>
+    
+    <div style="margin-bottom:16px;">
+        <h5 style="margin:0 0 8px 0;">Team Assignments (comma-separated digits)</h5>
+        ${nameGroupsHTML}
+    </div>
+    
+    <div style="margin-bottom:16px;">
+        <h5 style="margin:0 0 8px 0;">Absent Colleagues</h5>
+        <input type="text" id="smax-ausentes" value="${currentAusentes.join(', ')}" 
+               style="width:100%;padding:6px;border:1px solid #ccc;border-radius:3px;" 
+               placeholder="Enter names separated by commas (e.g., LUANA, IVAN)">
+        <small style="color:#666;">Tickets assigned to absent colleagues won't be colored</small>
+    </div>
+    
+    <div style="margin-top:12px;text-align:right;border-top:1px solid #ddd;padding-top:10px;">
+        <button id="smax-reset" style="margin-right:8px;padding:6px 12px;background:#999;color:#fff;border:none;border-radius:4px;cursor:pointer;">Reset to Defaults</button>
+        <button id="smax-save" style="padding:6px 16px;background:#222;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;">Save</button>
+    </div>
   `;
         document.body.appendChild(panel);
 
         btn.addEventListener('click', ()=> panel.style.display = panel.style.display === 'none' ? 'block' : 'none');
 
-        // initialize values
+        // initialize checkbox values
         document.getElementById('smax-toggle-highlights').checked = !!prefs.highlightsOn;
         document.getElementById('smax-toggle-namebadges').checked = !!prefs.nameBadgesOn;
         document.getElementById('smax-toggle-magistrado').checked = !!prefs.magistradoOn;
-        document.getElementById('smax-toggle-skull').checked = true;
+        document.getElementById('smax-toggle-skull').checked = !!prefs.flagSkullOn;
 
+        // Save button handler
         document.getElementById('smax-save').addEventListener('click', ()=>{
             prefs.highlightsOn = document.getElementById('smax-toggle-highlights').checked;
             prefs.nameBadgesOn = document.getElementById('smax-toggle-namebadges').checked;
             prefs.magistradoOn = document.getElementById('smax-toggle-magistrado').checked;
-            // skull controlled by this pref; initFlagUsersSkull should check it
             prefs.flagSkullOn = document.getElementById('smax-toggle-skull').checked;
-            if (typeof savePrefs === 'function') savePrefs();
+            
+            // Save name groups
+            const newNameGroups = {};
+            document.querySelectorAll('.smax-name-digits').forEach(input => {
+                const name = input.dataset.name;
+                const digitsStr = input.value.trim();
+                if (digitsStr) {
+                    newNameGroups[name] = digitsStr.split(',').map(d => parseInt(d.trim())).filter(n => !isNaN(n));
+                }
+            });
+            prefs.nameGroups = newNameGroups;
+            
+            // Save ausentes
+            const ausentesStr = document.getElementById('smax-ausentes').value.trim();
+            prefs.ausentes = ausentesStr ? ausentesStr.split(',').map(s => s.trim()).filter(s => s) : [];
+            
+            savePrefs();
             panel.style.display = 'none';
+            
+            // Rebuild the name mapping and refresh
+            rebuildNameMapping();
             scheduleRunAllFeatures();
+            
+            alert('Settings saved! Refresh the page to see all changes.');
+        });
+        
+        // Reset button handler
+        document.getElementById('smax-reset').addEventListener('click', ()=>{
+            if (confirm('Reset all settings to defaults?')) {
+                prefs.nameGroups = null;
+                prefs.ausentes = null;
+                prefs.highlightsOn = true;
+                prefs.nameBadgesOn = true;
+                prefs.magistradoOn = true;
+                prefs.flagSkullOn = true;
+                savePrefs();
+                alert('Settings reset! Please refresh the page.');
+                panel.style.display = 'none';
+            }
         });
     }
 
@@ -226,7 +303,7 @@
    *  2) Badges por finais de ID (célula inteira)
    * =======================================================*/
 
-  // Lista sem GLAUCO (definir APENAS UMA VEZ no arquivo!)
+  // Default name groups (can be overridden in settings)
   const NAME_GROUPS = {
     "ADRIANO":       [0,1,2,3,4,5,6],
     "DANIEL LEAL":   [7,8,9,10,11,12],
@@ -245,24 +322,34 @@
     "YVES":          [94,95,96,97,98,99]
   };
 
-  // Ausências/férias
+  // Default absences (can be overridden in settings)
   const AUSENTES = []; // ex.: ["LUANA"]
 
-  // Índice sub-final → dono (aceita "0"/"00" .. "99")
-  const SUB_TO_OWNER = (() => {
-    const m = new Map();
-    for (const [nome, finais] of Object.entries(NAME_GROUPS)) {
+  // Dynamic mapping that will be rebuilt when settings change
+  let SUB_TO_OWNER = new Map();
+  let CURRENT_AUSENTES = [];
+
+  function rebuildNameMapping() {
+    const nameGroups = prefs.nameGroups || NAME_GROUPS;
+    const ausentes = prefs.ausentes || AUSENTES;
+    
+    SUB_TO_OWNER.clear();
+    for (const [nome, finais] of Object.entries(nameGroups)) {
       for (const f of finais) {
         const s1 = String(f);
         const s2 = String(f).padStart(2,'0');
-        m.set(s1, nome);
-        m.set(s2, nome);
+        SUB_TO_OWNER.set(s1, nome);
+        SUB_TO_OWNER.set(s2, nome);
       }
     }
-    return m;
-  })();
+    
+    CURRENT_AUSENTES = ausentes;
+  }
 
-  const isAtivo = (nome) => nome && !AUSENTES.includes(nome);
+  // Initialize on load
+  rebuildNameMapping();
+
+  const isAtivo = (nome) => nome && !CURRENT_AUSENTES.includes(nome);
 
   function donoSubfinal(sub) {
     const nome = SUB_TO_OWNER.get(sub);
