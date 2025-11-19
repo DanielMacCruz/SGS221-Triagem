@@ -8,8 +8,8 @@
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
 // @run-at       document-idle
 // @grant        GM_addStyle
-// @downloadURL  https://raw.githubusercontent.com/DanielMacCruz/SGS221-Triagem/refs/heads/main/Triagem.js
-// @updateURL    https://raw.githubusercontent.com/DanielMacCruz/SGS221-Triagem/refs/heads/main/Triagem.js
+// @downloadURL  https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/main/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
+// @updateURL    https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/main/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
 // @homepageURL  https://github.com/DanielMacCruz/SGS221-Triagem
 // @supportURL   https://chatgpt.com
 // ==/UserScript==
