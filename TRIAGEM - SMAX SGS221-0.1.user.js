@@ -13,8 +13,6 @@
 // @homepageURL  https://github.com/DanielMacCruz/SGS221-Triagem
 // @supportURL   https://chatgpt.com
 // ==/UserScript==
-//TESTEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
-
 
 (() => {
   'use strict';
