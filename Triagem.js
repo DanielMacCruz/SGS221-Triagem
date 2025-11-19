@@ -6,12 +6,14 @@
 // @author       YOU
 // @match        https://suporte.tjsp.jus.br/saw/*
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
-// @grant        GM.xmlHttpRequest
-// @grant        GM.setValue
-// @grant        GM.getValue
-// @grant        GM.addStyle
+// @run-at       document-idle
+// @grant        GM_addStyle
+// @downloadURL  https://raw.githubusercontent.com/DanielMacCruz/SGS221-Triagem/refs/heads/main/Triagem.js
+// @updateURL    https://raw.githubusercontent.com/DanielMacCruz/SGS221-Triagem/refs/heads/main/Triagem.js
+// @homepageURL  https://github.com/DanielMacCruz/SGS221-Triagem
+// @supportURL   https://chatgpt.com
 // ==/UserScript==
-
+//TESTEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
 
 (() => {
   'use strict';
