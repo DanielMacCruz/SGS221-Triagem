@@ -28,6 +28,8 @@
     nameGroups: null, // will store custom name assignments
     ausentes: null,   // will store absent colleagues
     nameColors: null, // will store assigned colors for each name
+    enableRealWrites: false, // gate for real backend changes (relations etc.)
+    defaultGlobalChangeId: '' // optional default Change (global) id
   };
 
   // Load saved preferences
@@ -104,40 +106,27 @@
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   #smax-refresh-overlay-inner {
-    background:#fff;
-    border-radius:8px;
-    padding:24px 28px;
-    max-width:420px;
-    box-shadow:0 10px 30px rgba(0,0,0,.35);
-    text-align:center;
-  }
-  #smax-refresh-overlay-inner h3 {
-    margin:0 0 12px 0;
-    font-size:18px;
-  }
-  #smax-refresh-overlay-inner p {
-    margin:0 0 16px 0;
-    font-size:14px;
-    line-height:1.5;
+    width:70px;
+    height:70px;
+    border-radius:50%;
+    background:#34c759;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 0 0 2px rgba(255,255,255,.35), 0 0 16px rgba(52,199,89,.8);
   }
   #smax-refresh-now {
-    padding:8px 16px;
-    background:#2e7d32;
+    width:46px;
+    height:46px;
+    border-radius:50%;
+    border:none;
+    background:transparent;
     color:#fff;
-    border:none;
-    border-radius:4px;
-    font-size:14px;
     cursor:pointer;
-    margin-right:8px;
-  }
-  #smax-refresh-later {
-    padding:8px 12px;
-    background:#eee;
-    color:#333;
-    border:none;
-    border-radius:4px;
-    font-size:13px;
-    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:26px;
   }
 
   /* triage HUD: entry button + panel */
@@ -225,6 +214,31 @@
     cursor:pointer;
     font-size:13px;
   }
+
+  /* HUD state highlights */
+  .smax-triage-chip {
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+  }
+  .smax-triage-chip[data-active="true"] {
+    box-shadow:0 0 0 1px rgba(250,250,250,0.7), 0 0 18px rgba(250,250,250,0.55);
+    transform:translateY(-1px) scale(1.01);
+  }
+  .smax-urg-low[data-active="true"]  { background:#facc15;color:#111827;border-color:#facc15; }
+  .smax-urg-med[data-active="true"]  { background:#fb923c;color:#111827;border-color:#fb923c; }
+  .smax-urg-high[data-active="true"] { background:#f97316;color:#111827;border-color:#f97316; }
+  .smax-urg-crit[data-active="true"] { background:#ef4444;color:#fee2e2;border-color:#ef4444; }
+  #smax-triage-assign-owner[data-active="ready"] {
+    background:#bbf7d0;color:#14532d;border-color:#bbf7d0;
+  }
+  #smax-triage-assign-owner[data-active="selected"] {
+    background:#22c55e;color:#022c22;border-color:#22c55e;
+  }
+  #smax-triage-link-global[data-active="ready"] {
+    background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe;
+  }
+  #smax-triage-link-global[data-active="selected"] {
+    background:#3b82f6;color:#e5f0ff;border-color:#3b82f6;
+  }
   
   #smax-triage-status {
     font-size:12px;
@@ -234,6 +248,9 @@
 
   /* ====================== Network / triage cache ====================== */
   const TRIAGE_CACHE = new Map();
+
+  // Minimal per-ticket cache entry extension point;
+  // we can hang more fields here as we start reading simulator responses.
 
   function ingestRequestListPayload(obj) {
     try {
@@ -288,13 +305,18 @@
   }
 
   const PEOPLE_CACHE = new Map();
+  let PEOPLE_TOTAL = null;
 
   function ingestPersonListPayload(obj) {
     try {
       if (!obj || typeof obj !== 'object') return;
+      if (obj.meta && typeof obj.meta.total_count === 'number') {
+        PEOPLE_TOTAL = obj.meta.total_count;
+      }
       const entities = Array.isArray(obj.entities) ? obj.entities : [];
       for (const ent of entities) {
         if (!ent || typeof ent !== 'object') continue;
+        if (ent.entity_type !== 'Person') continue;
         const props = ent.properties || {};
 
         const id = props.Id != null ? String(props.Id) : '';
@@ -303,6 +325,7 @@
         const name = (props.Name || '').toString().trim();
         const upn  = (props.Upn  || '').toString().trim();
         const email = (props.Email || '').toString().trim();
+        if (!email && !upn) continue;
         const isVip = !!props.IsVIP;
         const employeeNumber = props.EmployeeNumber || '';
         const firstName = props.FirstName || '';
@@ -322,12 +345,70 @@
         });
       }
       if (entities.length) {
-        console.log('[SMAX] Ingeridas', entities.length, 'pessoas na PEOPLE_CACHE (total:', PEOPLE_CACHE.size, ')');
+        console.log('[SMAX] Ingeridas', entities.length, 'entidades; pessoas válidas na PEOPLE_CACHE (total:', PEOPLE_CACHE.size, ')');
       }
     } catch (e) {
       console.warn('[SMAX] Falha ao ingerir payload de Person:', e);
     }
   }
+
+function ensurePeopleLoadedForSettings() {
+  try {
+    // If we already have people, don't re-fetch
+    if (PEOPLE_CACHE.size > 0) return;
+
+    const pageSize = 50; // can be 50, 100, etc.
+    const baseUrl =
+      '/rest/213963628/ems/Person?filter=' +
+      encodeURIComponent('(PersonToGroup[Id in (51642955)])') +
+      '&layout=Name,Avatar,Location,IsVIP,OrganizationalGroup,Upn,IsDeleted,FirstName,LastName,EmployeeNumber,Email' +
+      '&meta=totalCount' +
+      '&order=Name+asc';
+
+    const fetchPage = (skip) => {
+      const url = `${baseUrl}&size=${pageSize}&skip=${skip || 0}`;
+      return fetch(url, {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json, text/plain, */*',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      })
+        .then((r) => r.text())
+        .then((txt) => {
+          if (!txt) return;
+          try {
+            const json = JSON.parse(txt);
+            ingestPersonListPayload(json);
+          } catch (e) {
+            console.warn('[SMAX] Falha ao carregar pessoas para settings:', e);
+          }
+        })
+        .catch(() => {});
+    };
+
+    // First page, then loop remaining pages if needed
+    fetchPage(0).then(() => {
+      if (typeof PEOPLE_TOTAL !== 'number' || PEOPLE_TOTAL <= PEOPLE_CACHE.size) {
+        return;
+      }
+      const total = PEOPLE_TOTAL;
+      const already = PEOPLE_CACHE.size;
+      console.log('[SMAX] PEOPLE_TOTAL=', total, 'já carregadas=', already);
+
+      // Schedule the rest of the pages sequentially
+      const promises = [];
+      for (let skip = pageSize; skip < total; skip += pageSize) {
+        promises.push(fetchPage(skip));
+      }
+      Promise.all(promises).then(() => {
+        console.log('[SMAX] Carregamento completo de pessoas. Total cache:', PEOPLE_CACHE.size, 'esperado:', PEOPLE_TOTAL);
+      });
+    });
+  } catch (e) {
+    console.warn('[SMAX] Erro ao disparar carregamento de pessoas:', e);
+  }
+}
 
   (function patchNetworkForTriage(){
     try {
@@ -385,6 +466,161 @@
     }
   })();
 
+  /* ====================== Workflow simulator helper ====================== */
+  function postWorkflowSimulatorRequest(oldProps, newProps) {
+    try {
+      if (!oldProps || !oldProps.Id) {
+        console.warn('[SMAX] Simulator chamado sem Id no OldEntity');
+      }
+      const body = {
+        NewEntity: { entity_type: 'Request', properties: newProps || {} },
+        OldEntity: { entity_type: 'Request', properties: oldProps || {} },
+        SimulationMeta: ['HideAction']
+      };
+
+      // Try to forward the same XSRF token that SMAX uses
+      const xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+      const xsrfToken = xsrfMatch ? decodeURIComponent(xsrfMatch[1]) : null;
+
+      const headers = {
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/json;charset=utf-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      };
+      if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
+
+      return fetch('/rest/213963628/workflow/simulator/Request', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify(body)
+      }).then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text().then(t => {
+          try { return t ? JSON.parse(t) : null; } catch { return null; }
+        });
+      }).catch(err => {
+        console.warn('[SMAX] Falha no workflow simulator:', err);
+        return null;
+      });
+    } catch (e) {
+      console.warn('[SMAX] Erro ao preparar chamada ao workflow simulator:', e);
+      return Promise.resolve(null);
+    }
+  }
+
+  /* ====================== Real UPDATE helper (Request) ====================== */
+  function postUpdateRequest(newProps) {
+    try {
+      if (!prefs.enableRealWrites) {
+        console.warn('[SMAX] Real writes are disabled (enableRealWrites=false).');
+        return Promise.resolve({ skipped: true, reason: 'real-writes-disabled' });
+      }
+
+      const props = Object.assign({}, newProps || {});
+      if (!props.Id) {
+        console.warn('[SMAX] postUpdateRequest chamado sem Id em properties');
+        return Promise.resolve(null);
+      }
+
+      const xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+      const xsrfToken = xsrfMatch ? decodeURIComponent(xsrfMatch[1]) : null;
+
+      const headers = {
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/json;charset=utf-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      };
+      if (xsrfToken) headers['X-XSRF-TOKEN'] = xsrfToken;
+
+      const body = {
+        entities: [
+          {
+            entity_type: 'Request',
+            properties: props
+          }
+        ],
+        operation: 'UPDATE'
+      };
+
+      return fetch('/rest/213963628/ems/bulk', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify(body)
+      }).then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text().then(t => {
+          try { return t ? JSON.parse(t) : null; } catch { return null; }
+        });
+      }).catch(err => {
+        console.warn('[SMAX] Falha em postUpdateRequest:', err);
+        return null;
+      });
+    } catch (e) {
+      console.warn('[SMAX] Erro ao preparar chamada postUpdateRequest:', e);
+      return Promise.resolve(null);
+    }
+  }
+
+  /* ====================== Real relation helper (REQUEST -> CHANGE) ====================== */
+  function postCreateChangeCausedByRequest(requestId, changeId) {
+    try {
+      if (!prefs.enableRealWrites) {
+        console.warn('[SMAX] Real writes are disabled (enableRealWrites=false).');
+        return Promise.resolve({ skipped: true, reason: 'real-writes-disabled' });
+      }
+
+      const req = String(requestId || '').trim();
+      const chg = String(changeId || '').trim();
+      if (!req || !chg) {
+        console.warn('[SMAX] postCreateChangeCausedByRequest chamado sem ids válidos:', req, chg);
+        return Promise.resolve(null);
+      }
+
+      const xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+      const xsrfToken = xsrfMatch ? decodeURIComponent(xsrfMatch[1]) : null;
+
+      const headers = {
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/json;charset=utf-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      };
+      if (xsrfToken) headers['X-XSRF-TOKEN'] = xsrfToken;
+
+      const body = {
+        relationships: [
+          {
+            name: 'ChangeCausedByRequest',
+            firstEndpoint: { Request: req },
+            secondEndpoint: { Change: chg }
+          }
+        ],
+        operation: 'CREATE'
+      };
+
+      return fetch('/rest/213963628/ems/bulk', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify(body)
+      }).then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text().then(t => {
+          try { return t ? JSON.parse(t) : null; } catch { return null; }
+        });
+      }).catch(err => {
+        console.warn('[SMAX] Falha ao criar relação ChangeCausedByRequest:', err);
+        return null;
+      });
+    } catch (e) {
+      console.warn('[SMAX] Erro ao preparar chamada de relação ChangeCausedByRequest:', e);
+      return Promise.resolve(null);
+    }
+  }
+
     function createSettingsUI() {
         if (document.getElementById('smax-settings')) return;
         const btn = document.createElement('button');
@@ -395,7 +631,21 @@
 
         const panel = document.createElement('div');
         panel.id = 'smax-settings';
-        Object.assign(panel.style, { position:'fixed', right:'12px', bottom:'54px', maxWidth:'650px', maxHeight:'80vh', overflow:'auto', zIndex:999999, padding:'16px', borderRadius:'8px', background:'#fff', boxShadow:'0 6px 18px rgba(0,0,0,.25)', display:'none' });
+        Object.assign(panel.style, {
+          position:'fixed',
+          right:'12px',
+          bottom:'54px',
+          maxWidth:'650px',
+          maxHeight:'80vh',
+          minHeight:'220px',
+          overflow:'auto',
+          zIndex:999999,
+          padding:'16px',
+          borderRadius:'8px',
+          background:'#fff',
+          boxShadow:'0 6px 18px rgba(0,0,0,.25)',
+          display:'none'
+        });
         
         function rebuildPanel() {
             // Get current name groups and ausentes
@@ -437,23 +687,41 @@
             }
             
             panel.innerHTML = `
-        <h4 style="margin:0 0 12px 0;border-bottom:2px solid #222;padding-bottom:6px;">SMAX — Settings</h4>
-        <div style="margin-bottom:16px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <h5 style="margin:0;">Team Assignments</h5>
-                <button id="smax-add-person" style="padding:4px 12px;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">+ Add Person</button>
-            </div>
-            <div style="margin-bottom:10px;border:1px solid #ddd;border-radius:4px;padding:8px;">
-              <div style="font-size:12px;margin-bottom:6px;">Adicionar pessoa pelo SMAX (usa PEOPLE_CACHE)</div>
-              <input type="text" id="smax-person-search" placeholder="Digite parte do nome ou UPN"
-                     style="width:100%;padding:6px;border:1px solid #ccc;border-radius:3px;font-size:12px;margin-bottom:6px;">
-              <div id="smax-person-results" style="max-height:140px;overflow:auto;font-size:12px;"></div>
-            </div>
-            <div id="smax-team-list">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <div style="font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:#444;">
+                  Distribuição de chamados
+                </div>
+              </div>
+
+              <div style="margin-bottom:10px;padding:8px 10px;border-radius:6px;border:1px solid #ddd;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                <div style="display:flex;flex-direction:column;font-size:12px;color:#333;">
+                  <span style="font-weight:600;">Modo real (gravar no SMAX)</span>
+                  <span style="opacity:0.8;">Quando ativo, urgência, atribuição e vínculo ao global salvam de verdade.</span>
+                </div>
+                <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+                  <input type="checkbox" id="smax-realwrites-toggle" ${prefs.enableRealWrites ? 'checked' : ''} />
+                  <span>Ativar</span>
+                </label>
+              </div>
+
+              <div style="margin-bottom:10px;border:1px solid #ddd;border-radius:6px;padding:8px 8px 6px;display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;">
+                  <span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:#1976d2;align-items:center;justify-content:center;color:#fff;font-size:11px;">
+                    +
+                  </span>
+                  <span>SMAX</span>
+                </div>
+                <input type="text"
+                      id="smax-person-search"
+                      placeholder="Buscar pessoa por nome ou UPN"
+                      style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
+                <div id="smax-person-results" style="max-height:140px;overflow:auto;font-size:12px;"></div>
+              </div>
+
+              <div id="smax-team-list">
                 ${nameGroupsHTML}
-            </div>
-          </div>
-      `;
+              </div>
+            `;
 
             // Re-attach event listeners
             attachEventListeners();
@@ -468,8 +736,8 @@
                 const q = (term || '').toString().trim().toUpperCase();
                 if (!q || PEOPLE_CACHE.size === 0) {
                   resultsEl.innerHTML = q
-                    ? '<div style="color:#999;">Nenhuma pessoa encontrada. Abra um dropdown de responsável para carregar dados.</div>'
-                    : '<div style="color:#999;">Digite para buscar nas pessoas já carregadas.</div>';
+                    ? '<div style="color:#999;">Nenhuma pessoa encontrada.</div>'
+                    : '';
                   return;
                 }
                 const matches = [];
@@ -516,23 +784,13 @@
               renderResults(''); // initial help text
             }
 
-            // Add person button
-            document.getElementById('smax-add-person').addEventListener('click', () => {
-                const name = prompt('Enter person name (e.g., JOAO):');
-                if (!name || !name.trim()) return;
-                const digits = prompt('Enter assigned digits (e.g., 0-6 or 7,10-15,20):');
-
-                const currentNames = prefs.nameGroups || {};
-                const newName = name.trim().toUpperCase();
-
-                // Add name even if no digits provided
-                currentNames[newName] = digits ? parseDigitRanges(digits) : [];
-                prefs.nameGroups = currentNames;
+            const realToggle = document.getElementById('smax-realwrites-toggle');
+            if (realToggle) {
+              realToggle.addEventListener('change', () => {
+                prefs.enableRealWrites = !!realToggle.checked;
                 savePrefs();
-                rebuildNameMapping();
-                showRefreshOverlay();
-                rebuildPanel();
-            });
+              });
+            }
 
             // Remove person buttons
             document.querySelectorAll('.smax-remove-name').forEach(btn => {
@@ -559,8 +817,12 @@
                 });
             });
 
-            // Auto-save when digits change
+            // Auto-save when digits change (restrict to digits, comma, dash)
             document.querySelectorAll('.smax-name-digits').forEach(input => {
+              input.addEventListener('input', () => {
+                const cleaned = input.value.replace(/[^0-9,\-]/g, '');
+                if (cleaned !== input.value) input.value = cleaned;
+              });
               input.addEventListener('change', () => {
                 const name = input.dataset.name;
                 const digitsStr = input.value.trim();
@@ -596,9 +858,14 @@
         rebuildPanel();
 
         btn.addEventListener('click', () => {
-            const isVisible = panel.style.display !== 'none';
-            panel.style.display = isVisible ? 'none' : 'block';
-            if (!isVisible) rebuildPanel(); // Refresh panel when opening
+          const isVisible = panel.style.display !== 'none';
+          if (!isVisible) {
+            ensurePeopleLoadedForSettings();
+            rebuildPanel();
+            panel.style.display = 'block';
+          } else {
+            panel.style.display = 'none';
+          }
         });
     }
 
@@ -609,29 +876,20 @@
       overlay.id = 'smax-refresh-overlay';
       overlay.innerHTML = `
         <div id="smax-refresh-overlay-inner">
-          <h3>Configurações atualizadas</h3>
-          <p>
-            Para aplicar todas as mudanças, atualize a página.<br>
-            A lista de chamados ficará certinha com as novas regras.
-          </p>
-          <button id="smax-refresh-now">Atualizar agora</button>
-          <button id="smax-refresh-later">Vou atualizar depois</button>
+          <button id="smax-refresh-now" title="Atualizar página">
+            &#x21bb;
+          </button>
         </div>
       `;
       document.body.appendChild(overlay);
 
-      const refreshBtn = () => document.getElementById('smax-refresh-now');
-      const laterBtn = () => document.getElementById('smax-refresh-later');
-
-      overlay.addEventListener('click', (e) => {
-        const target = e.target;
-        if (!(target instanceof HTMLElement)) return;
-        if (target.id === 'smax-refresh-now') {
+      const btn = document.getElementById('smax-refresh-now');
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
           window.location.reload();
-        } else if (target.id === 'smax-refresh-later') {
-          overlay.style.display = 'none';
-        }
-      });
+        });
+      }
     }
     overlay.style.display = 'flex';
   }
@@ -940,10 +1198,32 @@
           </div>
         </div>
         <div id="smax-triage-hud-footer">
-          <div>
-            <button type="button" class="smax-triage-primary" id="smax-triage-next" disabled>Próximo chamado</button>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-low"   id="smax-triage-urg-low"   title="Baixa urgência"   disabled>Baixa</button>
+              <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-med"   id="smax-triage-urg-med"   title="Média urgência"   disabled>Média</button>
+              <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-high"  id="smax-triage-urg-high"  title="Alta urgência"    disabled>Alta</button>
+              <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit"  id="smax-triage-urg-crit"  title="Urgência crítica" disabled>Crítica</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              <button type="button" class="smax-triage-primary smax-triage-chip"   id="smax-triage-assign-owner" title="Atribuir ao dono dos dígitos" disabled>Sem dono</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;font-size:12px;color:#e5e7eb;">
+              <span style="opacity:0.8;">Pai:</span>
+              <input type="text" id="smax-triage-global-id" placeholder="Id do pai" 
+                     style="width:130px;padding:4px 6px;border-radius:999px;border:1px solid #4b5563;background:#020617;color:#e5e7eb;font-size:12px;" />
+                    <button type="button" class="smax-triage-secondary smax-triage-chip" id="smax-triage-link-global" 
+                      title="Marcar este chamado para ter o pai informado" disabled>Marcar pai</button>
+            </div>
           </div>
-          <div id="smax-triage-status">Fila de triagem ainda não inicializada.</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <div id="smax-triage-real-flag" style="font-size:11px;font-weight:600;color:#f97316;display:none;">MODO REAL ATIVO</div>
+            <div style="display:flex;flex-direction:row;gap:6px;">
+              <button type="button" class="smax-triage-secondary" id="smax-triage-next" disabled>Próximo chamado</button>
+              <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>Commit</button>
+            </div>
+            <div id="smax-triage-status">Fila de triagem ainda não inicializada.</div>
+          </div>
         </div>
       </div>
     `;
@@ -956,6 +1236,21 @@
     const bodyEl = backdrop.querySelector('#smax-triage-hud-body');
     const statusEl = backdrop.querySelector('#smax-triage-status');
     const nextBtn = backdrop.querySelector('#smax-triage-next');
+    const commitBtn = backdrop.querySelector('#smax-triage-commit');
+    const btnUrgLow  = backdrop.querySelector('#smax-triage-urg-low');
+    const btnUrgMed  = backdrop.querySelector('#smax-triage-urg-med');
+    const btnUrgHigh = backdrop.querySelector('#smax-triage-urg-high');
+    const btnUrgCrit = backdrop.querySelector('#smax-triage-urg-crit');
+    const btnAssign  = backdrop.querySelector('#smax-triage-assign-owner');
+    const btnSkip    = backdrop.querySelector('#smax-triage-skip');
+    const inputGlobal = backdrop.querySelector('#smax-triage-global-id');
+    const btnLinkGlobal = backdrop.querySelector('#smax-triage-link-global');
+    const realFlagEl = backdrop.querySelector('#smax-triage-real-flag');
+
+    // Track current staged triage decisions for this ticket
+    let currentUrgency = null; // 'low' | 'med' | 'high' | 'crit' | null
+    let stagedAssign = false;  // user intends to assign to owner
+    let stagedGlobal = false;  // user intends to relate to a parent
 
     const renderCurrent = () => {
       if (!bodyEl || !statusEl) return;
@@ -963,10 +1258,22 @@
         bodyEl.innerHTML = '<div style="font-size:14px;color:#e5e7eb;">Nenhum chamado encontrado na lista atual.</div>';
         statusEl.textContent = 'Verifique se a visão contém ID e Hora de Criação.';
         if (nextBtn) nextBtn.disabled = true;
+        if (btnUrgLow)  { btnUrgLow.disabled  = true;  btnUrgLow.dataset.active  = 'false'; }
+        if (btnUrgMed)  { btnUrgMed.disabled  = true;  btnUrgMed.dataset.active  = 'false'; }
+        if (btnUrgHigh) { btnUrgHigh.disabled = true;  btnUrgHigh.dataset.active = 'false'; }
+        if (btnUrgCrit) { btnUrgCrit.disabled = true;  btnUrgCrit.dataset.active = 'false'; }
+        if (btnAssign)  { btnAssign.disabled  = true;  btnAssign.dataset.active = 'false'; }
+        if (btnLinkGlobal) { btnLinkGlobal.disabled = true; btnLinkGlobal.dataset.active = 'false'; }
+        if (commitBtn) commitBtn.disabled = true;
         return;
       }
 
       if (triageIndex < 0 || triageIndex >= triageQueue.length) triageIndex = 0;
+
+      // Reset per-ticket HUD state when changing ticket
+      currentUrgency = null;
+      stagedAssign = false;
+      stagedGlobal = false;
 
       const item = triageQueue[triageIndex];
 
@@ -986,13 +1293,45 @@
       bodyEl.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:6px;font-size:14px;">
           <div><strong>ID:</strong> ${item.idText || '-'} ${vipBadge}</div>
-          <div style="white-space:normal;overflow:hidden;text-overflow:ellipsis;"><strong>Título:</strong> ${item.subjectText || '(sem título visível)'}</div>
+          <div style="white-space:normal;overflow:hidden;text-overflow:ellipsis;">${item.subjectText || '(sem descrição visível)'}</div>
           <div><strong>Hora de criação:</strong> ${item.createdText || '-'}</div>
         </div>
       `;
 
+      if (realFlagEl) {
+        realFlagEl.style.display = prefs.enableRealWrites ? 'block' : 'none';
+      }
+
       statusEl.textContent = `Chamado ${triageIndex+1} de ${triageQueue.length} na fila (VIP primeiro, depois mais antigo).`;
       if (nextBtn) nextBtn.disabled = false;
+      if (commitBtn) commitBtn.disabled = true;
+      if (btnUrgLow)  { btnUrgLow.disabled  = false; btnUrgLow.dataset.active  = 'false'; }
+      if (btnUrgMed)  { btnUrgMed.disabled  = false; btnUrgMed.dataset.active  = 'false'; }
+      if (btnUrgHigh) { btnUrgHigh.disabled = false; btnUrgHigh.dataset.active = 'false'; }
+      if (btnUrgCrit) { btnUrgCrit.disabled = false; btnUrgCrit.dataset.active = 'false'; }
+      // Compute responsável for this ticket and reflect on assign button label.
+      if (btnAssign) {
+        const ownerName = getResponsavel(item.idText) || getResponsavel(item.idNum != null ? String(item.idNum) : '');
+        if (ownerName) {
+          const firstName = ownerName.split(' ')[0] || ownerName;
+          btnAssign.textContent = 'Atribuir a ' + firstName;
+          btnAssign.title = 'Atribuir para ' + ownerName + ' (dono dos dígitos)';
+          btnAssign.dataset.active = 'ready';
+        } else {
+          btnAssign.textContent = 'Sem dono';
+          btnAssign.title = 'Sem dono configurado para estes dígitos (ajuste a distribuição manualmente).';
+          btnAssign.dataset.active = 'false';
+        }
+        // Enable only after urgency is chosen; start disabled here.
+        btnAssign.disabled = true;
+      }
+
+      // Pre-fill global change id from prefs if present (one-time per HUD open)
+      if (btnLinkGlobal) {
+        const hasGlobal = inputGlobal && inputGlobal.value.trim().length > 0;
+        btnLinkGlobal.disabled = !hasGlobal;
+        btnLinkGlobal.dataset.active = hasGlobal ? 'ready' : 'false';
+      }
     };
 
     const openHud = () => {
@@ -1016,6 +1355,273 @@
         if (!triageQueue.length) return;
         triageIndex = (triageIndex + 1) % triageQueue.length;
         renderCurrent();
+      });
+    }
+
+    function currentItem() {
+      if (!triageQueue.length) return null;
+      if (triageIndex < 0 || triageIndex >= triageQueue.length) return null;
+      return triageQueue[triageIndex];
+    }
+
+    function currentTicketId() {
+      const item = currentItem();
+      return item && item.idText ? String(item.idText) : null;
+    }
+
+    function setStatusTemp(msg) {
+      if (!statusEl) return;
+      const prev = statusEl.textContent;
+      statusEl.textContent = msg;
+      setTimeout(() => {
+        if (statusEl.textContent === msg) statusEl.textContent = prev;
+      }, 2500);
+    }
+
+    function doSetUrgency(level) {
+      const id = currentTicketId();
+      if (!id) return;
+
+      // Map our 4 levels to Urgency + ImpactScope.
+      let Urgency = 'NoDisruption';
+      let ImpactScope = 'SingleUser';
+      if (level === 'med') {
+        Urgency = 'SlightDisruption';
+        ImpactScope = 'SiteOrDepartment';
+      } else if (level === 'high') {
+        Urgency = 'SignificantDisruption';
+        ImpactScope = 'Enterprise';
+      } else if (level === 'crit') {
+        Urgency = 'TotalLossOfService';
+        ImpactScope = 'Enterprise';
+      }
+
+      // Only stage values here; saving happens on Commit
+      const newProps = { Id: id, Urgency, ImpactScope };
+
+      // Toggle: clicking the same level clears urgency
+      if (currentUrgency === level) {
+        currentUrgency = null;
+        if (btnUrgLow)  btnUrgLow.dataset.active  = 'false';
+        if (btnUrgMed)  btnUrgMed.dataset.active  = 'false';
+        if (btnUrgHigh) btnUrgHigh.dataset.active = 'false';
+        if (btnUrgCrit) btnUrgCrit.dataset.active = 'false';
+        setStatusTemp('Urgência desmarcada.');
+        if (btnAssign && btnAssign.textContent !== 'Sem dono') {
+          btnAssign.disabled = true;
+          if (!stagedAssign) btnAssign.dataset.active = 'ready';
+        }
+        if (!stagedAssign && !stagedGlobal && commitBtn) commitBtn.disabled = false ? (commitBtn.disabled = true) : true;
+        return;
+      }
+
+      setStatusTemp('Urgência selecionada (ainda não gravada).');
+      currentUrgency = level;
+      if (btnUrgLow)  btnUrgLow.dataset.active  = level === 'low'  ? 'true' : 'false';
+      if (btnUrgMed)  btnUrgMed.dataset.active  = level === 'med'  ? 'true' : 'false';
+      if (btnUrgHigh) btnUrgHigh.dataset.active = level === 'high' ? 'true' : 'false';
+      if (btnUrgCrit) btnUrgCrit.dataset.active = level === 'crit' ? 'true' : 'false';
+      // Enable assign staging once urgency is chosen (if there is an owner)
+      if (btnAssign && btnAssign.textContent !== 'Sem dono') {
+        btnAssign.disabled = false;
+        if (!stagedAssign) btnAssign.dataset.active = 'ready';
+      }
+      // Enable commit when something is staged
+      if (commitBtn) commitBtn.disabled = false;
+    }
+
+    function doAssignToDigitsOwner() {
+      const item = currentItem();
+      if (!item || !item.idText) return;
+
+      // Toggle off assignment if already staged, even without urgency
+      if (stagedAssign) {
+        stagedAssign = false;
+        if (btnAssign) {
+          btnAssign.dataset.active = 'ready';
+          // keep it enabled only if some urgency is still selected
+          if (!currentUrgency) btnAssign.disabled = true;
+        }
+        if (!currentUrgency && !stagedGlobal && commitBtn) commitBtn.disabled = true;
+        setStatusTemp('Atribuição desmarcada.');
+        return;
+      }
+
+      // Resolve owner name via final digits
+      const ownerName = getResponsavel(item.idText) || getResponsavel(item.idNum != null ? String(item.idNum) : '');
+      if (!ownerName) {
+        setStatusTemp('Nenhum dono de dígitos configurado para este chamado.');
+        return;
+      }
+
+      // Try to find this owner in PEOPLE_CACHE by name (case-insensitive)
+      const targetNorm = ownerName.toUpperCase();
+      let expertId = null;
+      for (const p of PEOPLE_CACHE.values()) {
+        if ((p.name || '').toUpperCase() === targetNorm) {
+          expertId = p.id; // SMAX person Id like "40092090"
+          break;
+        }
+      }
+
+      if (!expertId) {
+        setStatusTemp('Pessoa "' + ownerName + '" não encontrada no SMAX (carregue pessoas nas configurações).');
+        return;
+      }
+
+      const newProps = { Id: String(item.idText), ExpertAssignee: String(expertId) };
+
+      const firstName = ownerName.split(' ')[0] || ownerName;
+      btnAssign.textContent = 'Atribuir a ' + firstName;
+      setStatusTemp('Atribuir para ' + ownerName + ' selecionado (será gravado no Commit).');
+      stagedAssign = true;
+      if (btnAssign) btnAssign.dataset.active = 'selected';
+      if (commitBtn) commitBtn.disabled = false;
+    }
+
+    function doLinkToGlobal() {
+      const item = currentItem();
+      if (!item || !item.idText) return;
+      if (!inputGlobal || !btnLinkGlobal) return;
+
+      const globalId = inputGlobal.value.trim();
+      if (!globalId) {
+        setStatusTemp('Informe o Id do pai primeiro.');
+        btnLinkGlobal.disabled = true;
+        btnLinkGlobal.dataset.active = 'false';
+        return;
+      }
+
+      // Toggle off parent if already staged
+      if (stagedGlobal) {
+        stagedGlobal = false;
+        btnLinkGlobal.dataset.active = 'ready';
+        if (!currentUrgency && !stagedAssign && commitBtn) commitBtn.disabled = true;
+        setStatusTemp('Relacionamento com pai desmarcado.');
+        return;
+      }
+
+      setStatusTemp('Relacionamento com pai ' + globalId + ' selecionado (será gravado no Commit).');
+      stagedGlobal = true;
+      btnLinkGlobal.dataset.active = 'selected';
+      if (commitBtn) commitBtn.disabled = false;
+    }
+
+    if (btnUrgLow)  btnUrgLow.addEventListener('click',  () => doSetUrgency('low'));
+    if (btnUrgMed)  btnUrgMed.addEventListener('click',  () => doSetUrgency('med'));
+    if (btnUrgHigh) btnUrgHigh.addEventListener('click', () => doSetUrgency('high'));
+    if (btnUrgCrit) btnUrgCrit.addEventListener('click', () => doSetUrgency('crit'));
+    if (btnAssign)  btnAssign.addEventListener('click',   () => doAssignToDigitsOwner());
+    if (btnLinkGlobal) btnLinkGlobal.addEventListener('click', () => doLinkToGlobal());
+    if (inputGlobal && btnLinkGlobal) {
+      inputGlobal.addEventListener('input', () => {
+        // only allow digits in parent field
+        const cleaned = inputGlobal.value.replace(/\D/g, '');
+        if (cleaned !== inputGlobal.value) inputGlobal.value = cleaned;
+        const hasGlobal = inputGlobal.value.trim().length > 0;
+        btnLinkGlobal.disabled = !hasGlobal;
+        btnLinkGlobal.dataset.active = hasGlobal ? 'ready' : 'false';
+        // typing a parent also makes Commit available
+        if (hasGlobal && commitBtn) commitBtn.disabled = false;
+      });
+    }
+
+    // Commit: perform all staged changes in one go
+    if (commitBtn) {
+      commitBtn.addEventListener('click', () => {
+        const item = currentItem();
+        if (!item || !item.idText) return;
+
+        const id = String(item.idText);
+        const props = { Id: id };
+
+        // urgency
+        if (currentUrgency) {
+          let Urgency = 'NoDisruption';
+          let ImpactScope = 'SingleUser';
+          if (currentUrgency === 'med') {
+            Urgency = 'SlightDisruption';
+            ImpactScope = 'SiteOrDepartment';
+          } else if (currentUrgency === 'high') {
+            Urgency = 'SignificantDisruption';
+            ImpactScope = 'Enterprise';
+          } else if (currentUrgency === 'crit') {
+            Urgency = 'TotalLossOfService';
+            ImpactScope = 'Enterprise';
+          }
+          props.Urgency = Urgency;
+          props.ImpactScope = ImpactScope;
+        }
+
+        // assign
+        let ownerName = null;
+        if (stagedAssign && btnAssign && btnAssign.textContent !== 'Sem dono') {
+          ownerName = getResponsavel(item.idText) || getResponsavel(item.idNum != null ? String(item.idNum) : '');
+          if (ownerName) {
+            const targetNorm = ownerName.toUpperCase();
+            let expertId = null;
+            for (const p of PEOPLE_CACHE.values()) {
+              if ((p.name || '').toUpperCase() === targetNorm) {
+                expertId = p.id;
+                break;
+              }
+            }
+            if (expertId) props.ExpertAssignee = String(expertId);
+          }
+        }
+
+        // global / parent
+        const globalId = inputGlobal && inputGlobal.value.trim();
+        const doGlobal = stagedGlobal && !!globalId;
+
+        if (!currentUrgency && !props.ExpertAssignee && !doGlobal) {
+          setStatusTemp('Nada para gravar neste chamado.');
+          return;
+        }
+
+        // If real writes are off, just report what would be done
+        if (!prefs.enableRealWrites) {
+          setStatusTemp('Modo simulação: mudanças não foram gravadas.');
+          // Move to next ticket to keep fluxo
+          if (triageQueue.length) {
+            triageIndex = (triageIndex + 1) % triageQueue.length;
+            renderCurrent();
+          }
+          return;
+        }
+
+        setStatusTemp('Gravando alterações...');
+
+        const promises = [];
+        if (currentUrgency || props.ExpertAssignee) {
+          promises.push(postUpdateRequest(props));
+        }
+        if (doGlobal) {
+          // create relation + escalate
+          promises.push(
+            postCreateChangeCausedByRequest(id, globalId).then(relRes => {
+              if (!(relRes && relRes.meta && relRes.meta.completion_status === 'OK')) return relRes;
+              const updateProps = { Id: id, PhaseId: 'Escalate' };
+              return postUpdateRequest(updateProps);
+            })
+          );
+        }
+
+        Promise.all(promises).then(results => {
+          const hadError = results.some(r => !r || (r.skipped && !r.meta) || (r.meta && r.meta.completion_status !== 'OK'));
+          if (hadError) {
+            setStatusTemp('Algumas alterações podem não ter sido gravadas.');
+          } else {
+            setStatusTemp('Alterações gravadas com sucesso.');
+          }
+          // Advance to next ticket and reset staged state
+          if (triageQueue.length) {
+            triageIndex = (triageIndex + 1) % triageQueue.length;
+            renderCurrent();
+          }
+        }).catch(() => {
+          setStatusTemp('Erro ao gravar alterações.');
+        });
       });
     }
   }
