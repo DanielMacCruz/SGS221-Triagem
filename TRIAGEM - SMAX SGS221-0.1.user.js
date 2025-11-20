@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         TRIAGEM - SMAX SGS221
 // @namespace    https://github.com/DanielMacCruz/SGS221-Triagem
-// @version      0.1
+// @version      0.2
 // @description  Interface enhancements for triagem workflow
 // @author       YOU
 // @match        https://suporte.tjsp.jus.br/saw/*
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
 // @run-at       document-idle
 // @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @downloadURL  https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/main/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
 // @updateURL    https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/main/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
 // @homepageURL  https://github.com/DanielMacCruz/SGS221-Triagem
@@ -19,315 +21,681 @@
 
   /* ====================== Preferências ====================== */
   const prefs = {
-    highlightsOn: true,
     nameBadgesOn: true,
-    magistradoOn: true,
     collapseOn: false,
     enlargeCommentsOn: true,
-    autoTagsOn: true,
     flagSkullOn: true,
     nameGroups: null, // will store custom name assignments
     ausentes: null,   // will store absent colleagues
+    nameColors: null, // will store assigned colors for each name
   };
 
-    if (typeof GM_getValue === 'function') {
-        const saved = GM_getValue('smax_prefs');
-        if (saved) Object.assign(prefs, saved);
+  // Load saved preferences
+  try {
+    const saved = GM_getValue('smax_prefs');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.assign(prefs, parsed);
+      console.log('[SMAX] Loaded preferences:', prefs);
     }
+  } catch (e) {
+    console.warn('[SMAX] Failed to load preferences:', e);
+  }
 
-    // helper to save
-    const savePrefs = () => { if (typeof GM_setValue === 'function') GM_setValue('smax_prefs', prefs); };
-
-    // Example usage: when toggling a pref
-    // prefs.highlightsOn = false; savePrefs();
+  // Helper to save preferences
+  const savePrefs = () => {
+    try {
+      const serialized = JSON.stringify(prefs);
+      GM_setValue('smax_prefs', serialized);
+      console.log('[SMAX] Saved preferences:', prefs);
+    } catch (e) {
+      console.error('[SMAX] Failed to save preferences:', e);
+    }
+  };
 
   /* ====================== CSS Global ====================== */
   GM_addStyle(`
-    /* highlights */
-    .tmx-hl-yellow { background:#ffeb3b; color:#000; font-weight:700; border-radius:5px; padding:0 .14em; }
-    .tmx-hl-red    { background:#d32f2f; color:#fff; font-weight:700; border-radius:3px; padding:0 .16em; }
-    .tmx-hl-green  { background:#2e7d32; color:#fff; font-weight:700; border-radius:3px; padding:0 .14em; }
-    .tmx-hl-blue   { background:#1e88e5; color:#fff; font-weight:700; border-radius:3px; padding:0 .14em; }
-    .tmx-hl-pink   { background:#FC0FC0; color:#000; font-weight:700; border-radius:3px; padding:0 .14em; }
+  /* badge de nomes (célula inteira colorida) */
+  .slick-cell.tmx-namecell { font-weight:700 !important; transition: box-shadow .15s ease; }
+  .slick-cell.tmx-namecell a { color: inherit !important; }
+  .slick-cell.tmx-namecell:focus-within { outline: 2px solid rgba(0,0,0,.25); outline-offset: 2px; }
+  .slick-cell.tmx-namecell:hover { box-shadow: 0 0 0 2px rgba(0,0,0,.08) inset; }
 
-    /* célula marcada como juiz/juíza */
-    .tmx-juizdireito-hit { background:#1e88e5 !important; color:#fff !important; font-weight:700 !important; }
+  /* comentários */
+  .comment-items { height: auto !important; max-height: none !important; }
 
-    /* badge de nomes (célula inteira colorida) */
-    .slick-cell.tmx-namecell { font-weight:700 !important; transition: box-shadow .15s ease; }
-    .slick-cell.tmx-namecell a { color: inherit !important; }
-    .slick-cell.tmx-namecell:focus-within { outline: 2px solid rgba(0,0,0,.25); outline-offset: 2px; }
-    .slick-cell.tmx-namecell:hover { box-shadow: 0 0 0 2px rgba(0,0,0,.08) inset; }
+  /* settings: custom Ausente checkbox */
+  .smax-absent-wrapper {
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    cursor:pointer;
+    font-size:12px;
+    white-space:nowrap;
+  }
+  .smax-absent-input {
+    position:absolute;
+    opacity:0;
+    pointer-events:none;
+  }
+  .smax-absent-box {
+    width:14px;
+    height:14px;
+    border:1px solid #555;
+    border-radius:2px;
+    background:#fff;
+    box-sizing:border-box;
+  }
+  .smax-absent-input:checked + .smax-absent-box {
+    background:#d32f2f;
+    border-color:#d32f2f;
+    box-shadow:0 0 0 1px #d32f2f;
+  }
 
-    /* TAGs automáticas (CSS blindado) */
-    .tag-smax, .tag-smax * { all: unset !important; }
-    .tag-smax {
-      display: inline-block !important;
-      background: #e0e0e0 !important;
-      color: #000 !important;
-      font-weight: 700 !important;
-      border-radius: 3px !important;
-      padding: 0 4px !important;
-      margin-right: 4px !important;
-      white-space: nowrap !important;
-      font-size: inherit !important;
-      font-family: inherit !important;
-      line-height: inherit !important;
-      text-decoration: none !important;
+  /* overlay para sugerir atualização de página */
+  #smax-refresh-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 999998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  #smax-refresh-overlay-inner {
+    background:#fff;
+    border-radius:8px;
+    padding:24px 28px;
+    max-width:420px;
+    box-shadow:0 10px 30px rgba(0,0,0,.35);
+    text-align:center;
+  }
+  #smax-refresh-overlay-inner h3 {
+    margin:0 0 12px 0;
+    font-size:18px;
+  }
+  #smax-refresh-overlay-inner p {
+    margin:0 0 16px 0;
+    font-size:14px;
+    line-height:1.5;
+  }
+  #smax-refresh-now {
+    padding:8px 16px;
+    background:#2e7d32;
+    color:#fff;
+    border:none;
+    border-radius:4px;
+    font-size:14px;
+    cursor:pointer;
+    margin-right:8px;
+  }
+  #smax-refresh-later {
+    padding:8px 12px;
+    background:#eee;
+    color:#333;
+    border:none;
+    border-radius:4px;
+    font-size:13px;
+    cursor:pointer;
+  }
+
+  /* triage HUD: entry button + panel */
+  #smax-triage-start-btn {
+    position:fixed;
+    left:50%;
+    bottom:18px;
+    transform:translateX(-50%);
+    z-index:999999;
+    padding:10px 22px;
+    border-radius:999px;
+    border:none;
+    cursor:pointer;
+    font-size:16px;
+    font-weight:600;
+    background:#1976d2;
+    color:#fff;
+    box-shadow:0 4px 12px rgba(0,0,0,.35);
+  }
+
+  #smax-triage-hud-backdrop {
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.5);
+    z-index:999997;
+    display:none;
+    align-items:center;
+    justify-content:center;
+  }
+
+  #smax-triage-hud {
+    background:#111827;
+    color:#e5e7eb;
+    border-radius:12px;
+    padding:18px 20px 16px;
+    max-width:900px;
+    width:90vw;
+    box-shadow:0 20px 45px rgba(0,0,0,.7);
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+
+  #smax-triage-hud-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:10px;
+  }
+
+  #smax-triage-hud-header h3 {
+    margin:0;
+    font-size:18px;
+  }
+
+  #smax-triage-hud-body {
+    background:#020617;
+    border-radius:8px;
+    padding:12px 14px;
+    min-height:80px;
+    margin-bottom:10px;
+  }
+
+  #smax-triage-hud-footer {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+  }
+
+  .smax-triage-primary {
+    padding:8px 16px;
+    border-radius:999px;
+    border:none;
+    cursor:pointer;
+    background:#22c55e;
+    color:#022c22;
+    font-weight:600;
+  }
+
+  .smax-triage-secondary {
+    padding:6px 12px;
+    border-radius:999px;
+    border:1px solid #4b5563;
+    background:transparent;
+    color:#e5e7eb;
+    cursor:pointer;
+    font-size:13px;
+  }
+  
+  #smax-triage-status {
+    font-size:12px;
+    color:#9ca3af;
+  }
+`);
+
+  /* ====================== Network / triage cache ====================== */
+  const TRIAGE_CACHE = new Map();
+
+  function ingestRequestListPayload(obj) {
+    try {
+      if (!obj || typeof obj !== 'object') return;
+      const entities = Array.isArray(obj.entities) ? obj.entities : [];
+      for (const ent of entities) {
+        if (!ent || typeof ent !== 'object') continue;
+        const props = ent.properties || {};
+        const rel = ent.related_properties || {};
+
+        const id = props.Id != null ? String(props.Id) : '';
+        if (!id) continue;
+
+        const createdRaw = props.CreateTime;
+        let createdText = '';
+        let createdTs = 0;
+        if (typeof createdRaw === 'number') {
+          createdTs = createdRaw;
+          createdText = new Date(createdRaw).toLocaleString();
+        } else if (createdRaw != null) {
+          createdText = String(createdRaw);
+          createdTs = parseSmaxDateTime(createdText) || 0;
+        }
+
+        const priority = props.Priority || '';
+        const isVipPerson = !!(rel.RequestedForPerson && rel.RequestedForPerson.IsVIP);
+        const isVip = isVipPerson || /VIP/i.test(String(priority));
+
+        const descHtml = props.Description || '';
+        const tmpDiv = document.createElement('div');
+        tmpDiv.innerHTML = String(descHtml);
+        const subjectText = (tmpDiv.textContent || tmpDiv.innerText || '').trim().split('\n')[0] || '';
+
+        const idNum = parseInt(id.replace(/\D/g,''),10);
+
+        TRIAGE_CACHE.set(id, {
+          idText: id,
+          idNum: isNaN(idNum) ? null : idNum,
+          createdText,
+          createdTs,
+          isVip,
+          subjectText,
+          row: null
+        });
+      }
+      if (entities.length) {
+        console.log('[SMAX] Ingeridos', entities.length, 'chamados na TRIAGE_CACHE (total:', TRIAGE_CACHE.size, ')');
+      }
+    } catch (e) {
+      console.warn('[SMAX] Falha ao ingerir payload de Request:', e);
     }
-    .tag-smax [class^="tmx-hl-"], .tag-smax [class*=" tmx-hl-"] { all: unset !important; background: none !important; color: inherit !important; }
+  }
 
-    /* comentários */
-    .comment-items { height: auto !important; max-height: none !important; }
-  `);
+  const PEOPLE_CACHE = new Map();
+
+  function ingestPersonListPayload(obj) {
+    try {
+      if (!obj || typeof obj !== 'object') return;
+      const entities = Array.isArray(obj.entities) ? obj.entities : [];
+      for (const ent of entities) {
+        if (!ent || typeof ent !== 'object') continue;
+        const props = ent.properties || {};
+
+        const id = props.Id != null ? String(props.Id) : '';
+        if (!id) continue;
+
+        const name = (props.Name || '').toString().trim();
+        const upn  = (props.Upn  || '').toString().trim();
+        const email = (props.Email || '').toString().trim();
+        const isVip = !!props.IsVIP;
+        const employeeNumber = props.EmployeeNumber || '';
+        const firstName = props.FirstName || '';
+        const lastName  = props.LastName  || '';
+        const location  = props.Location  || '';
+
+        PEOPLE_CACHE.set(id, {
+          id,
+          name,
+          upn,
+          email,
+          isVip,
+          employeeNumber,
+          firstName,
+          lastName,
+          location
+        });
+      }
+      if (entities.length) {
+        console.log('[SMAX] Ingeridas', entities.length, 'pessoas na PEOPLE_CACHE (total:', PEOPLE_CACHE.size, ')');
+      }
+    } catch (e) {
+      console.warn('[SMAX] Falha ao ingerir payload de Person:', e);
+    }
+  }
+
+  (function patchNetworkForTriage(){
+    try {
+      // XHR
+      const origOpen = XMLHttpRequest.prototype.open;
+      const origSend = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+        try { this.__smaxUrl = url; } catch {}
+        return origOpen.call(this, method, url, ...rest);
+      };
+      XMLHttpRequest.prototype.send = function(body) {
+        this.addEventListener('load', function() {
+          try {
+                        const url = this.__smaxUrl || this.responseURL || '';
+            if (!/\/rest\/\d+\/ems\/(Request|Person)/i.test(url)) return;
+            if (!this.responseText) return;
+            const json = JSON.parse(this.responseText);
+            if (/\/rest\/\d+\/ems\/Request/i.test(url)) {
+              ingestRequestListPayload(json);
+            } else if (/\/rest\/\d+\/ems\/Person/i.test(url)) {
+              ingestPersonListPayload(json);
+            }
+          } catch {}
+        });
+        return origSend.call(this, body);
+      };
+
+      // fetch
+      if (window.fetch) {
+        const origFetch = window.fetch;
+        window.fetch = function(input, init) {
+          return origFetch(input, init).then(resp => {
+            try {
+              const url = resp.url || (typeof input === 'string' ? input : '');
+              if (!/\/rest\/\d+\/ems\/(Request|Person)/i.test(url)) return resp;
+              const clone = resp.clone();
+              clone.text().then(txt => {
+                try {
+                  if (!txt) return;
+                  const json = JSON.parse(txt);
+                  if (/\/rest\/\d+\/ems\/Request/i.test(url)) {
+                    ingestRequestListPayload(json);
+                  } else if (/\/rest\/\d+\/ems\/Person/i.test(url)) {
+                    ingestPersonListPayload(json);
+                  }
+                } catch {}
+              });
+            } catch {}
+            return resp;
+          });
+        };
+      }
+    } catch (e) {
+      console.warn('[SMAX] Falha ao fazer patch de rede para triagem:', e);
+    }
+  })();
 
     function createSettingsUI() {
         if (document.getElementById('smax-settings')) return;
         const btn = document.createElement('button');
         btn.id = 'smax-settings-btn';
-        btn.textContent = 'SMAX';
-        Object.assign(btn.style, { position:'fixed', right:'12px', bottom:'12px', zIndex:999999, padding:'8px 10px', borderRadius:'8px', background:'#222', color:'#fff', border:'none', cursor:'pointer' });
+        btn.textContent = '⚙️ SMAX';
+        Object.assign(btn.style, { position:'fixed', right:'12px', bottom:'12px', zIndex:999999, padding:'8px 12px', borderRadius:'8px', background:'#222', color:'#fff', border:'none', cursor:'pointer', fontSize:'14px' });
         document.body.appendChild(btn);
 
         const panel = document.createElement('div');
         panel.id = 'smax-settings';
-        Object.assign(panel.style, { position:'fixed', right:'12px', bottom:'54px', maxWidth:'600px', maxHeight:'80vh', overflow:'auto', zIndex:999999, padding:'14px', borderRadius:'8px', background:'#fff', boxShadow:'0 6px 18px rgba(0,0,0,.25)', display:'none' });
+        Object.assign(panel.style, { position:'fixed', right:'12px', bottom:'54px', maxWidth:'650px', maxHeight:'80vh', overflow:'auto', zIndex:999999, padding:'16px', borderRadius:'8px', background:'#fff', boxShadow:'0 6px 18px rgba(0,0,0,.25)', display:'none' });
         
-        // Get current name groups and ausentes
-        const currentNames = prefs.nameGroups || NAME_GROUPS;
-        const currentAusentes = prefs.ausentes || AUSENTES;
-        
-        // Build the name groups editor HTML
-        let nameGroupsHTML = '';
-        for (const [name, digits] of Object.entries(currentNames)) {
-            nameGroupsHTML += `
-                <div style="margin-bottom:8px;">
-                    <label style="display:inline-block;width:120px;font-weight:600;">${name}:</label>
-                    <input type="text" class="smax-name-digits" data-name="${name}" value="${digits.join(',')}" 
-                           style="width:200px;padding:4px;border:1px solid #ccc;border-radius:3px;" 
-                           placeholder="0,1,2,3">
-                </div>`;
-        }
-        
-        panel.innerHTML = `
-    <h4 style="margin:0 0 12px 0;border-bottom:2px solid #222;padding-bottom:6px;">SMAX — Settings</h4>
-    
-    <div style="margin-bottom:16px;">
-        <h5 style="margin:0 0 8px 0;">Features</h5>
-        <label style="display:block;margin-bottom:4px;"><input type="checkbox" id="smax-toggle-highlights"> Highlights</label>
-        <label style="display:block;margin-bottom:4px;"><input type="checkbox" id="smax-toggle-namebadges"> Name badges</label>
-        <label style="display:block;margin-bottom:4px;"><input type="checkbox" id="smax-toggle-magistrado"> Magistrado highlight</label>
-        <label style="display:block;margin-bottom:4px;"><input type="checkbox" id="smax-toggle-skull"> Skull alerts</label>
-    </div>
-    
-    <div style="margin-bottom:16px;">
-        <h5 style="margin:0 0 8px 0;">Team Assignments (comma-separated digits)</h5>
-        ${nameGroupsHTML}
-    </div>
-    
-    <div style="margin-bottom:16px;">
-        <h5 style="margin:0 0 8px 0;">Absent Colleagues</h5>
-        <input type="text" id="smax-ausentes" value="${currentAusentes.join(', ')}" 
-               style="width:100%;padding:6px;border:1px solid #ccc;border-radius:3px;" 
-               placeholder="Enter names separated by commas (e.g., LUANA, IVAN)">
-        <small style="color:#666;">Tickets assigned to absent colleagues won't be colored</small>
-    </div>
-    
-    <div style="margin-top:12px;text-align:right;border-top:1px solid #ddd;padding-top:10px;">
-        <button id="smax-reset" style="margin-right:8px;padding:6px 12px;background:#999;color:#fff;border:none;border-radius:4px;cursor:pointer;">Reset to Defaults</button>
-        <button id="smax-save" style="padding:6px 16px;background:#222;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;">Save</button>
-    </div>
-  `;
-        document.body.appendChild(panel);
-
-        btn.addEventListener('click', ()=> panel.style.display = panel.style.display === 'none' ? 'block' : 'none');
-
-        // initialize checkbox values
-        document.getElementById('smax-toggle-highlights').checked = !!prefs.highlightsOn;
-        document.getElementById('smax-toggle-namebadges').checked = !!prefs.nameBadgesOn;
-        document.getElementById('smax-toggle-magistrado').checked = !!prefs.magistradoOn;
-        document.getElementById('smax-toggle-skull').checked = !!prefs.flagSkullOn;
-
-        // Save button handler
-        document.getElementById('smax-save').addEventListener('click', ()=>{
-            prefs.highlightsOn = document.getElementById('smax-toggle-highlights').checked;
-            prefs.nameBadgesOn = document.getElementById('smax-toggle-namebadges').checked;
-            prefs.magistradoOn = document.getElementById('smax-toggle-magistrado').checked;
-            prefs.flagSkullOn = document.getElementById('smax-toggle-skull').checked;
+        function rebuildPanel() {
+            // Get current name groups and ausentes
+            const currentNames = prefs.nameGroups || NAME_GROUPS;
+            const currentAusentes = prefs.ausentes || AUSENTES;
             
-            // Save name groups
-            const newNameGroups = {};
+            // Sort names alphabetically
+            const sortedNames = Object.keys(currentNames).sort();
+            
+            // Build the name groups editor HTML (with explicit Absent checkbox)
+            let nameGroupsHTML = '';
+            for (const name of sortedNames) {
+                const digits = currentNames[name];
+                const isAbsent = currentAusentes.includes(name);
+                const rangeStr = digitsToRangeString(digits);
+                nameGroupsHTML += `
+                    <div style="margin-bottom:10px;padding:8px;background:${isAbsent ? '#ffe0e0' : '#f9f9f9'};border-radius:4px;">
+                      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+                        <span style="min-width:140px;font-weight:600;">${name}</span>
+                        <label class="smax-absent-wrapper">
+                          <input
+                            type="checkbox"
+                            class="smax-name-absent smax-absent-input"
+                            data-name="${name}"
+                            ${isAbsent ? 'checked' : ''}
+                          >
+                          <span class="smax-absent-box"></span>
+                          Ausente
+                        </label>
+                        <input type="text" class="smax-name-digits" data-name="${name}" value="${rangeStr}"
+                              style="flex:1;padding:6px;border:1px solid #ccc;border-radius:3px;font-family:monospace;"
+                              placeholder="0-6 or 7,8,10-15">
+                        <button class="smax-remove-name" data-name="${name}"
+                                style="padding:4px 8px;background:#d32f2f;color:#fff;border:none;border-radius:3px;cursor:pointer;">
+                          ✕
+                        </button>
+                      </div>
+                    </div>`;
+            }
+            
+            panel.innerHTML = `
+        <h4 style="margin:0 0 12px 0;border-bottom:2px solid #222;padding-bottom:6px;">SMAX — Settings</h4>
+        <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <h5 style="margin:0;">Team Assignments</h5>
+                <button id="smax-add-person" style="padding:4px 12px;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">+ Add Person</button>
+            </div>
+            <div style="margin-bottom:10px;border:1px solid #ddd;border-radius:4px;padding:8px;">
+              <div style="font-size:12px;margin-bottom:6px;">Adicionar pessoa pelo SMAX (usa PEOPLE_CACHE)</div>
+              <input type="text" id="smax-person-search" placeholder="Digite parte do nome ou UPN"
+                     style="width:100%;padding:6px;border:1px solid #ccc;border-radius:3px;font-size:12px;margin-bottom:6px;">
+              <div id="smax-person-results" style="max-height:140px;overflow:auto;font-size:12px;"></div>
+            </div>
+            <div id="smax-team-list">
+                ${nameGroupsHTML}
+            </div>
+          </div>
+      `;
+
+            // Re-attach event listeners
+            attachEventListeners();
+        }
+
+        function attachEventListeners() {
+            const searchInput = document.getElementById('smax-person-search');
+            const resultsEl = document.getElementById('smax-person-results');
+
+            if (searchInput && resultsEl) {
+              const renderResults = (term) => {
+                const q = (term || '').toString().trim().toUpperCase();
+                if (!q || PEOPLE_CACHE.size === 0) {
+                  resultsEl.innerHTML = q
+                    ? '<div style="color:#999;">Nenhuma pessoa encontrada. Abra um dropdown de responsável para carregar dados.</div>'
+                    : '<div style="color:#999;">Digite para buscar nas pessoas já carregadas.</div>';
+                  return;
+                }
+                const matches = [];
+                for (const p of PEOPLE_CACHE.values()) {
+                  const name = (p.name || '').toUpperCase();
+                  const upn = (p.upn || '').toUpperCase();
+                  if (name.includes(q) || upn.includes(q)) {
+                    matches.push(p);
+                    if (matches.length >= 30) break;
+                  }
+                }
+                if (!matches.length) {
+                  resultsEl.innerHTML = '<div style="color:#999;">Nenhuma pessoa corresponde à busca atual.</div>';
+                  return;
+                }
+                resultsEl.innerHTML = matches.map(p => `
+                  <div class="smax-person-pick"
+                       data-name="${p.name.replace(/"/g,'&quot;')}"
+                       style="padding:4px 6px;cursor:pointer;border-radius:3px;">
+                    <strong>${p.name}</strong>
+                    ${p.upn ? `<span style="color:#555;"> (${p.upn})</span>` : ''}
+                    ${p.isVip ? `<span style="margin-left:4px;padding:0 4px;border-radius:999px;background:#facc15;color:#854d0e;font-size:10px;font-weight:700;">VIP</span>` : ''}
+                  </div>
+                `).join('');
+
+                resultsEl.querySelectorAll('.smax-person-pick').forEach(el => {
+                  el.addEventListener('click', () => {
+                    const pickedName = (el.getAttribute('data-name') || '').toUpperCase();
+                    if (!pickedName) return;
+                    const currentNames = prefs.nameGroups || {};
+                    if (!currentNames[pickedName]) {
+                      currentNames[pickedName] = [];
+                      prefs.nameGroups = currentNames;
+                      savePrefs();
+                      rebuildNameMapping();
+                      showRefreshOverlay();
+                      rebuildPanel();
+                    }
+                  });
+                });
+              };
+
+              searchInput.addEventListener('input', () => renderResults(searchInput.value));
+              renderResults(''); // initial help text
+            }
+
+            // Add person button
+            document.getElementById('smax-add-person').addEventListener('click', () => {
+                const name = prompt('Enter person name (e.g., JOAO):');
+                if (!name || !name.trim()) return;
+                const digits = prompt('Enter assigned digits (e.g., 0-6 or 7,10-15,20):');
+
+                const currentNames = prefs.nameGroups || {};
+                const newName = name.trim().toUpperCase();
+
+                // Add name even if no digits provided
+                currentNames[newName] = digits ? parseDigitRanges(digits) : [];
+                prefs.nameGroups = currentNames;
+                savePrefs();
+                rebuildNameMapping();
+                showRefreshOverlay();
+                rebuildPanel();
+            });
+
+            // Remove person buttons
+            document.querySelectorAll('.smax-remove-name').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const name = btn.dataset.name;
+                    if (!confirm(`Remove ${name} from the team? This will permanently delete them.`)) return;
+
+                    const currentNames = prefs.nameGroups || {};
+                    delete currentNames[name];
+                    prefs.nameGroups = currentNames;
+
+                    // Also remove from ausentes if present
+                    const currentAusentes = prefs.ausentes || [];
+                    prefs.ausentes = currentAusentes.filter(n => n !== name);
+
+                    // Remove color assignment
+                    if (prefs.nameColors && prefs.nameColors[name]) {
+                        delete prefs.nameColors[name];
+                    }
+                    savePrefs();
+                    rebuildNameMapping();
+                    showRefreshOverlay();
+                    rebuildPanel();
+                });
+            });
+
+            // Auto-save when digits change
             document.querySelectorAll('.smax-name-digits').forEach(input => {
+              input.addEventListener('change', () => {
                 const name = input.dataset.name;
                 const digitsStr = input.value.trim();
-                if (digitsStr) {
-                    newNameGroups[name] = digitsStr.split(',').map(d => parseInt(d.trim())).filter(n => !isNaN(n));
-                }
-            });
-            prefs.nameGroups = newNameGroups;
-            
-            // Save ausentes
-            const ausentesStr = document.getElementById('smax-ausentes').value.trim();
-            prefs.ausentes = ausentesStr ? ausentesStr.split(',').map(s => s.trim()).filter(s => s) : [];
-            
-            savePrefs();
-            panel.style.display = 'none';
-            
-            // Rebuild the name mapping and refresh
-            rebuildNameMapping();
-            scheduleRunAllFeatures();
-            
-            alert('Settings saved! Refresh the page to see all changes.');
-        });
-        
-        // Reset button handler
-        document.getElementById('smax-reset').addEventListener('click', ()=>{
-            if (confirm('Reset all settings to defaults?')) {
-                prefs.nameGroups = null;
-                prefs.ausentes = null;
-                prefs.highlightsOn = true;
-                prefs.nameBadgesOn = true;
-                prefs.magistradoOn = true;
-                prefs.flagSkullOn = true;
+                const currentNames = prefs.nameGroups || {};
+                currentNames[name] = digitsStr ? parseDigitRanges(digitsStr) : [];
+                prefs.nameGroups = currentNames;
                 savePrefs();
-                alert('Settings reset! Please refresh the page.');
-                panel.style.display = 'none';
-            }
+                rebuildNameMapping();
+                showRefreshOverlay();
+              });
+            });
+
+            // Auto-save when absent checkbox toggled (explicit user-only control)
+            document.querySelectorAll('.smax-name-absent').forEach(checkbox => {
+              checkbox.addEventListener('change', () => {
+                const name = checkbox.dataset.name;
+                const currentAusentes = prefs.ausentes || [];
+                const isChecked = checkbox.checked;
+                const set = new Set(currentAusentes);
+                if (isChecked) set.add(name); else set.delete(name);
+                prefs.ausentes = Array.from(set);
+                savePrefs();
+                rebuildNameMapping();
+                // Also visually update background without full rebuild
+                const wrapper = checkbox.closest('div[style*="margin-bottom:10px"]');
+                if (wrapper) wrapper.style.background = isChecked ? '#ffe0e0' : '#f9f9f9';
+                showRefreshOverlay();
+              });
+            });
+        }
+
+        document.body.appendChild(panel);
+        rebuildPanel();
+
+        btn.addEventListener('click', () => {
+            const isVisible = panel.style.display !== 'none';
+            panel.style.display = isVisible ? 'none' : 'block';
+            if (!isVisible) rebuildPanel(); // Refresh panel when opening
         });
     }
+
+  function showRefreshOverlay() {
+    let overlay = document.getElementById('smax-refresh-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'smax-refresh-overlay';
+      overlay.innerHTML = `
+        <div id="smax-refresh-overlay-inner">
+          <h3>Configurações atualizadas</h3>
+          <p>
+            Para aplicar todas as mudanças, atualize a página.<br>
+            A lista de chamados ficará certinha com as novas regras.
+          </p>
+          <button id="smax-refresh-now">Atualizar agora</button>
+          <button id="smax-refresh-later">Vou atualizar depois</button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const refreshBtn = () => document.getElementById('smax-refresh-now');
+      const laterBtn = () => document.getElementById('smax-refresh-later');
+
+      overlay.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.id === 'smax-refresh-now') {
+          window.location.reload();
+        } else if (target.id === 'smax-refresh-later') {
+          overlay.style.display = 'none';
+        }
+      });
+    }
+    overlay.style.display = 'flex';
+  }
 
   /* ====================== Helpers ====================== */
   const debounce = (fn, wait=120) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); }; };
   const getGridViewport = (root=document) => root.querySelector('.slick-viewport') || root;
-  const escapeReg = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const normalizeText = t => (t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 
-  /* =========================================================
-   *  1) Destaques por cores (tokens/regex)
-   * =======================================================*/
-  const HL_GROUPS = {
-    amarelo: { cls:'tmx-hl-yellow',
-      whole:['jurisprudência','jurisprudencia','distribuidor','acessar','DJEN','Diário Eletrônico','automatização','ceman','Central de Mandados','mandado','mandados','movimentar','dois fatores','Renajud','Sisbajud','Autenticador','carta','evento','cadastro','automação','automações','migrar','migrador','migração','perito','perita','localizadores','localizador'],
-      substr:['acess','mail'], custom:[] },
-    vermelho:{ cls:'tmx-hl-red',
-      whole:['ERRO_AGENDAMENTO_EVENTO','ERRO_ENVIO_INTIMACAO_DJEN','ERRO_ENVIO_INTIMAÇÃO_DJEN','Item 04 do Comunicado 435/2025','Erro ao gerar o Documento Comprobatório Renajud','Cookie not found','Urgente','urgência','Plantão'],
-      substr:['erro','errado','réu revel','help_outline'], custom:[] },
-    verde:{ cls:'tmx-hl-green',
-      whole:['taxa','taxas','custa','custas','restituir','restituição','guia','diligência','diligencia','justiça gratuíta','parcelamento','parcelamento das custas', 'desvincular', 'desvinculação'],
-      substr:[], custom:[] },
-    azul:{ cls:'tmx-hl-blue',
-      whole:['magistrado','magistrada'], substr:[], custom:[/\bju[ií]z(?:es|a)?\b/giu] },
-    rosa:{ cls:'tmx-hl-pink',
-      whole:['inesperado'],
-      substr:[], custom:[] },
-  };
-  const HL_ORDER = ['vermelho','rosa','amarelo','verde','azul'];
-
-  const buildHighlightRegexes = (g) => {
-    const regs = [];
-    if (g.whole?.length) regs.push(new RegExp(`(?<![\\p{L}\\d_])(${g.whole.map(escapeReg).join('|')})(?![\\p{L}\\d_])`, 'giu'));
-    if (g.substr?.length) regs.push(new RegExp(`(${g.substr.map(escapeReg).join('|')})`, 'giu'));
-    if (g.custom?.length) regs.push(...g.custom);
-    return regs;
-  };
-
-  const HL_LIST = Object.entries(HL_GROUPS).map(([name,cfg]) => ({ name, cls:cfg.cls, regexes: buildHighlightRegexes(cfg) }));
-  const HL_ORDERED = HL_LIST.slice().sort((a,b)=>HL_ORDER.indexOf(a.name)-HL_ORDER.indexOf(b.name));
-  const processedTextNodes = new WeakSet();
-
-  const unwrapCellHighlights = (root) =>
-    root.querySelectorAll('.tmx-hl-yellow, .tmx-hl-red, .tmx-hl-green, .tmx-hl-blue, .tmx-hl-pink')
-        .forEach(span => span.replaceWith(document.createTextNode(span.textContent || '')));
-
-  function highlightMatchesInNode(container, regex, cls) {
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (processedTextNodes.has(node)) return NodeFilter.FILTER_REJECT;
-        const t = node.nodeValue;
-        if (!t || !t.trim()) return NodeFilter.FILTER_REJECT;
-        const pe = node.parentElement;
-        if (!pe) return NodeFilter.FILTER_REJECT;
-        if (pe.closest('input,textarea,[contenteditable],[role="button"],[aria-live]')) return NodeFilter.FILTER_REJECT;
-        const pcls = pe.classList;
-        if (pcls?.contains('tmx-hl-yellow') || pcls?.contains('tmx-hl-red') ||
-            pcls?.contains('tmx-hl-green') || pcls?.contains('tmx-hl-blue') ||
-            pcls?.contains('tmx-hl-pink')) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      }
-    });
-
-    const nodes = [];
-    for (let n; (n = walker.nextNode()); ) nodes.push(n);
-
-    for (const textNode of nodes) {
-          // mark as processed so we don't re-evaluate the same text node in this session
-        processedTextNodes.add(textNode);
-
-        const text = textNode.nodeValue;
-        if (!regex.test(text)) { regex.lastIndex = 0; continue; }
-        regex.lastIndex = 0;
-
-    const frag = document.createDocumentFragment();
-    let last = 0, m;
-    while ((m = regex.exec(text)) !== null) {
-      if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
-      const span = document.createElement('span');
-      span.className = cls;
-      span.textContent = m[0];
-      frag.appendChild(span);
-      last = m.index + m[0].length;
-    }
-    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
-    textNode.parentNode.replaceChild(frag, textNode);
-    }
-  }
-
-  function sweepHighlightsInCell(cell) {
-    if (!prefs.highlightsOn) return;
-    const current = (cell.textContent || '').trim();
-    const last = cell.getAttribute('data-tmx-last') || '';
-    if (current === last) return;
-
-    unwrapCellHighlights(cell);
-    for (const g of HL_ORDERED) for (const re of g.regexes) highlightMatchesInNode(cell, re, g.cls);
-    cell.setAttribute('data-tmx-last', (cell.textContent || '').trim());
-  }
-
-  function applyHighlightsInGrid(root=document) {
-    if (!prefs.highlightsOn) return;
-    const scope = getGridViewport(root);
-    scope.querySelectorAll('.slick-cell').forEach(sweepHighlightsInCell);
-  }
-
-  /* =========================================================
-   *  2) Badges por finais de ID (célula inteira)
-   * =======================================================*/
-
-  // Default name groups (can be overridden in settings)
-  const NAME_GROUPS = {
-    "ADRIANO":       [0,1,2,3,4,5,6],
-    "DANIEL LEAL":   [7,8,9,10,11,12],
-    "DOUGLAS":       [13,14,15,16,17,18,19],
-    "IONE":          [20,21,22,23,24,25],
-    "ISA":           [26,27,28,29,30,31,32],
-    "IVAN":          [33,34,35,36,37,38,39],
-    "LAIS":          [40,41,42,43,44,45,46],
-    "LEONARDO":      [47,48,49,50,51,52,53],
-    "LUANA":         [54,55,56,57,58,59,60],
-    "LUIS FELIPE":   [61,62,63,64,65,66,67],
-    "MARCELO":       [68,69,70,71,72,73,74],
-    "MARLON":        [75,76,77,78,79,80,81],
-    "ROBSON":        [82,83,84,85,86,87],
-    "SAMUEL":        [88,89,90,91,92,93],
-    "YVES":          [94,95,96,97,98,99]
-  };
-
-  // Default absences (can be overridden in settings)
-  const AUSENTES = []; // ex.: ["LUANA"]
+  // Empty defaults - everything is configured via settings UI
+  const NAME_GROUPS = {};
+  const AUSENTES = [];
 
   // Dynamic mapping that will be rebuilt when settings change
   let SUB_TO_OWNER = new Map();
   let CURRENT_AUSENTES = [];
+
+  // Parse digit ranges like "12-15" or "0,1,2-5,7"
+  function parseDigitRanges(input) {
+    const digits = [];
+    const parts = input.split(',').map(s => s.trim()).filter(s => s);
+    
+    for (const part of parts) {
+      if (part.includes('-')) {
+        const [start, end] = part.split('-').map(s => parseInt(s.trim()));
+        if (!isNaN(start) && !isNaN(end) && start <= end) {
+          for (let i = start; i <= end; i++) {
+            digits.push(i);
+          }
+        }
+      } else {
+        const num = parseInt(part);
+        if (!isNaN(num)) digits.push(num);
+      }
+    }
+    
+    return [...new Set(digits)].sort((a, b) => a - b);
+  }
+
+  // Convert array of digits to compact range notation
+  function digitsToRangeString(digits) {
+    if (!digits || digits.length === 0) return '';
+    const sorted = [...new Set(digits)].sort((a, b) => a - b);
+    const ranges = [];
+    let start = sorted[0];
+    let end = sorted[0];
+    
+    for (let i = 1; i <= sorted.length; i++) {
+      if (i < sorted.length && sorted[i] === end + 1) {
+        end = sorted[i];
+      } else {
+        if (end - start >= 2) {
+          ranges.push(`${start}-${end}`);
+        } else if (end === start) {
+          ranges.push(`${start}`);
+        } else {
+          ranges.push(`${start},${end}`);
+        }
+        start = sorted[i];
+        end = sorted[i];
+      }
+    }
+    
+    return ranges.join(',');
+  }
 
   function rebuildNameMapping() {
     const nameGroups = prefs.nameGroups || NAME_GROUPS;
@@ -336,10 +704,9 @@
     SUB_TO_OWNER.clear();
     for (const [nome, finais] of Object.entries(nameGroups)) {
       for (const f of finais) {
-        const s1 = String(f);
-        const s2 = String(f).padStart(2,'0');
-        SUB_TO_OWNER.set(s1, nome);
-        SUB_TO_OWNER.set(s2, nome);
+        // Only store zero-padded 2-digit strings since we check 2-digit pairs
+        const key = String(f).padStart(2, '0');
+        SUB_TO_OWNER.set(key, nome);
       }
     }
     
@@ -356,51 +723,68 @@
     return isAtivo(nome) ? nome : null;
   }
 
-  // Resolver geral com fallback (SEM regra especial Glauco)
+  // Resolver geral com fallback e skip de ausentes
+  // Walks backwards through ticket number checking ONLY 2-digit pairs
   function getResponsavel(numeroStr) {
-    let n = (numeroStr || "").replace(/\D/g, "");
-    if (!n) return null;
+    const digits = (numeroStr || "").replace(/\D/g, "");
+    if (digits.length < 2) return null;
 
-    while (n.length > 0) {
-      // últimos 2 dígitos
-      if (n.length >= 2) {
-        const sub2 = n.slice(-2);
-        const dono2 = donoSubfinal(sub2);
-        if (dono2) return dono2;
+    // Start from the last 2 digits and walk backwards
+    for (let i = digits.length; i >= 2; i--) {
+      const pair = digits.slice(i - 2, i);
+      const owner = SUB_TO_OWNER.get(pair);
+      
+      if (owner) {
+        // Found an owner - check if they're active
+        if (isAtivo(owner)) {
+          return owner; // Active owner found!
+        }
+        // Owner is absent, continue walking backwards
       }
-
-      // último dígito
-      const sub1 = n.slice(-1);
-      const dono1 = donoSubfinal(sub1);
-      if (dono1) return dono1;
-
-      // fallback: encurta
-      n = n.slice(0, -1);
     }
-    return null;
+    
+    return null; // No active owner found
   }
 
-  const NAME_COLOR = {
-    "ADRIANO":            {bg:"#E6E66A", fg:"#000"},
-    "DANIEL LEAL":        {bg:"#E6A85C", fg:"#000"},
-    "DOUGLAS":            {bg:"#66CCCC", fg:"#000"},
-    "IONE":               {bg:"#4D4D4D", fg:"#fff"},
-    "ISA":                {bg:"#5C6FA6", fg:"#fff"},
-    "IVAN":               {bg:"#9A9A52", fg:"#000"},
-    "LAIS":               {bg:"#D966D9", fg:"#000"},
-    "LEONARDO":           {bg:"#8E5A8E", fg:"#fff"},
-    "LUANA":              {bg:"#7ACC7A", fg:"#000"},
-    "LUIS FELIPE":        {bg:"#5CA3A3", fg:"#000"},
-    "MARCELO":            {bg:"#A05252", fg:"#fff"},
-    "MARLON":             {bg:"#A0A0A0", fg:"#000"},
-    "ROBSON":             {bg:"#CCCCCC", fg:"#000"},
-    "SAMUEL":             {bg:"#66A3CC", fg:"#000"},
-    "YVES":               {bg:"#4D4D4D", fg:"#fff"},
-  };
+  // Generate a color from a string (deterministic but visually distinct)
+  function generateColorForName(name) {
+    // Use name hash to generate a color
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    // Generate HSL color with good saturation and lightness
+    const hue = Math.abs(hash % 360);
+    const saturation = 45 + (Math.abs(hash >> 8) % 30); // 45-75%
+    const lightness = 50 + (Math.abs(hash >> 16) % 20); // 50-70%
+    
+    const bg = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    
+    // Determine if we need dark or light text based on lightness
+    const fg = lightness > 60 ? '#000' : '#fff';
+    
+    return { bg, fg };
+  }
+
+  // Get color for a name (from cache or generate new)
+  function getColorForName(name) {
+    if (!prefs.nameColors) prefs.nameColors = {};
+    
+    if (!prefs.nameColors[name]) {
+      prefs.nameColors[name] = generateColorForName(name);
+      savePrefs();
+    }
+    
+    return prefs.nameColors[name];
+  }
 
   const NAME_MARK_ATTR = 'adMarcado';
   const LINK_PICKERS = ['a.entity-link-id', '.slick-row a'];
-  const processedLinks = new WeakSet();
+  let processedLinks = new Set();
+
+  // Helper to clear processed links cache
+  processedLinks.clear = function() { this.clear(); processedLinks = new Set(); };
 
   // pega links únicos
   const pickAllLinks = () => {
@@ -422,6 +806,220 @@
       return m2 ? m2[1] : '';
   };
 
+  /* ====================== Triage queue helpers ====================== */
+  function parseSmaxDateTime(str) {
+    // Expect patterns like 13/11/25 16:37:57
+    if (!str) return null;
+    const m = str.trim().match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) return null;
+    let [ , d, mo, y, h, mi, s] = m;
+    d = parseInt(d,10); mo = parseInt(mo,10)-1; h = parseInt(h,10); mi = parseInt(mi,10); s = s?parseInt(s,10):0;
+    let year = parseInt(y,10);
+    if (year < 100) year += 2000;
+    return new Date(year, mo, d, h, mi, s).getTime();
+  }
+
+  function buildTriageQueue() {
+    // Primeiro, tente usar os dados completos capturados via REST
+    if (TRIAGE_CACHE.size) {
+      const items = Array.from(TRIAGE_CACHE.values());
+
+      // Tente associar cada item a uma linha visível (para highlight)
+      const viewport = getGridViewport();
+      const rows = viewport ? Array.from(viewport.querySelectorAll('.slick-row')) : [];
+      for (const item of items) {
+        item.row = null;
+        if (!rows.length || !item.idText) continue;
+        for (const row of rows) {
+          const cells = row.querySelectorAll('.slick-cell');
+          if (!cells.length) continue;
+          const cellText = (cells[0].textContent || '').trim();
+          if (cellText === item.idText) { item.row = row; break; }
+        }
+      }
+
+      items.sort((a,b)=>{
+        if (a.isVip !== b.isVip) return a.isVip ? -1 : 1;
+        if (a.createdTs !== b.createdTs) return a.createdTs - b.createdTs;
+        if (a.idNum != null && b.idNum != null && a.idNum !== b.idNum) return a.idNum - b.idNum;
+        return 0;
+      });
+
+      return items;
+    }
+
+    // Fallback: usar apenas o que está visível na grade
+    const viewport = getGridViewport();
+    if (!viewport) return [];
+
+    // Discover column indexes from SlickGrid header to be robust
+    let idColIndex = 0;
+    let createTimeColIndex = null;
+    try {
+      const headerColumns = document.querySelectorAll('.slick-header-column');
+      headerColumns.forEach((col, idx) => {
+        const aid = col.getAttribute('data-aid') || '';
+        if (/grid_header_Id$/i.test(aid)) idColIndex = idx;
+        if (/grid_header_CreateTime$/i.test(aid)) createTimeColIndex = idx;
+      });
+    } catch (e) {
+      console.warn('[SMAX] Falha ao mapear colunas da grade para triagem:', e);
+    }
+
+    const rows = Array.from(viewport.querySelectorAll('.slick-row'));
+    const queue = [];
+
+    for (const row of rows) {
+      const cells = row.querySelectorAll('.slick-cell');
+      if (!cells.length) continue;
+
+      const idCell = cells[idColIndex] || cells[0];
+      const idText = (idCell.textContent || '').trim();
+      const idNum = parseInt(idText.replace(/\D/g,''),10);
+      if (!idText) continue;
+
+      let createdCell = null;
+      if (createTimeColIndex != null && cells[createTimeColIndex]) {
+        createdCell = cells[createTimeColIndex];
+      } else {
+        createdCell = Array.from(cells).find(c => /Hora de Cria/i.test(c.getAttribute('title')||'') || /Hora de Cria/i.test(c.textContent||''));
+      }
+      const createdText = createdCell ? (createdCell.textContent || '').trim() : '';
+      const createdTs = parseSmaxDateTime(createdText) || 0;
+
+      const vipCell = Array.from(cells).find(c => /VIP/i.test(c.textContent||''));
+      const isVip = !!vipCell && /VIP/i.test(vipCell.textContent||'');
+
+      const link = row.querySelector('a.entity-link-id, .slick-row a');
+      const subjectText = link ? (link.textContent || '').trim() : '';
+
+      queue.push({
+        idText,
+        idNum: isNaN(idNum) ? null : idNum,
+        createdText,
+        createdTs,
+        isVip,
+        subjectText,
+        row
+      });
+    }
+
+    queue.sort((a,b)=>{
+      if (a.isVip !== b.isVip) return a.isVip ? -1 : 1;
+      if (a.createdTs !== b.createdTs) return a.createdTs - b.createdTs;
+      if (a.idNum != null && b.idNum != null && a.idNum !== b.idNum) return a.idNum - b.idNum;
+      return 0;
+    });
+
+    return queue;
+  }
+
+  /* =========================================================
+   *  Triage HUD (skeleton only for now)
+   * =======================================================*/
+  function initTriageHUD() {
+    if (document.getElementById('smax-triage-start-btn')) return;
+
+    const startBtn = document.createElement('button');
+    startBtn.id = 'smax-triage-start-btn';
+    startBtn.textContent = 'Iniciar triagem';
+    document.body.appendChild(startBtn);
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'smax-triage-hud-backdrop';
+    backdrop.innerHTML = `
+      <div id="smax-triage-hud">
+        <div id="smax-triage-hud-header">
+          <h3>Triagem de Chamados</h3>
+          <button type="button" class="smax-triage-secondary" id="smax-triage-close">Fechar</button>
+        </div>
+        <div id="smax-triage-hud-body">
+          <div style="font-size:14px;color:#e5e7eb;">
+            Nenhum chamado carregado ainda.<br>
+            Clique em "Próximo chamado" quando estiver pronto.
+          </div>
+        </div>
+        <div id="smax-triage-hud-footer">
+          <div>
+            <button type="button" class="smax-triage-primary" id="smax-triage-next" disabled>Próximo chamado</button>
+          </div>
+          <div id="smax-triage-status">Fila de triagem ainda não inicializada.</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+
+    let triageQueue = [];
+    let triageIndex = -1;
+    let lastHighlighted = null;
+
+    const bodyEl = backdrop.querySelector('#smax-triage-hud-body');
+    const statusEl = backdrop.querySelector('#smax-triage-status');
+    const nextBtn = backdrop.querySelector('#smax-triage-next');
+
+    const renderCurrent = () => {
+      if (!bodyEl || !statusEl) return;
+      if (!triageQueue.length) {
+        bodyEl.innerHTML = '<div style="font-size:14px;color:#e5e7eb;">Nenhum chamado encontrado na lista atual.</div>';
+        statusEl.textContent = 'Verifique se a visão contém ID e Hora de Criação.';
+        if (nextBtn) nextBtn.disabled = true;
+        return;
+      }
+
+      if (triageIndex < 0 || triageIndex >= triageQueue.length) triageIndex = 0;
+
+      const item = triageQueue[triageIndex];
+
+      if (lastHighlighted && lastHighlighted.row && lastHighlighted.row.isConnected) {
+        lastHighlighted.row.style.outline = '';
+        lastHighlighted.row.style.outlineOffset = '';
+      }
+      if (item.row && item.row.isConnected) {
+        item.row.style.outline = '3px solid #22c55e';
+        item.row.style.outlineOffset = '-2px';
+        lastHighlighted = item;
+        item.row.scrollIntoView({ block:'center', behavior:'smooth' });
+      }
+
+      const vipBadge = item.isVip ? '<span style="display:inline-block;margin-left:8px;padding:2px 6px;border-radius:999px;background:#facc15;color:#854d0e;font-size:11px;font-weight:700;">VIP</span>' : '';
+
+      bodyEl.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:14px;">
+          <div><strong>ID:</strong> ${item.idText || '-'} ${vipBadge}</div>
+          <div style="white-space:normal;overflow:hidden;text-overflow:ellipsis;"><strong>Título:</strong> ${item.subjectText || '(sem título visível)'}</div>
+          <div><strong>Hora de criação:</strong> ${item.createdText || '-'}</div>
+        </div>
+      `;
+
+      statusEl.textContent = `Chamado ${triageIndex+1} de ${triageQueue.length} na fila (VIP primeiro, depois mais antigo).`;
+      if (nextBtn) nextBtn.disabled = false;
+    };
+
+    const openHud = () => {
+      backdrop.style.display = 'flex';
+      triageQueue = buildTriageQueue();
+      triageIndex = 0;
+      renderCurrent();
+    };
+    const closeHud = () => { backdrop.style.display = 'none'; };
+
+    startBtn.addEventListener('click', openHud);
+    backdrop.querySelector('#smax-triage-close')?.addEventListener('click', closeHud);
+
+    // Close when clicking outside panel
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeHud();
+    });
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        if (!triageQueue.length) return;
+        triageIndex = (triageIndex + 1) % triageQueue.length;
+        renderCurrent();
+      });
+    }
+  }
+
   function applyNameBadges() {
     if (!prefs.nameBadgesOn) return;
     pickAllLinks().forEach(link => {
@@ -433,11 +1031,17 @@
       const owner = getResponsavel(digits);
       const cell = link.closest('.slick-cell');
 
-      if (cell && owner && NAME_COLOR[owner]) {
-        const { bg, fg } = NAME_COLOR[owner];
+      if (cell && owner) {
+        const { bg, fg } = getColorForName(owner);
         cell.classList.add('tmx-namecell');
         cell.style.background = bg;
         cell.style.color = fg || '';
+        cell.querySelectorAll('a').forEach(a => { a.style.color = 'inherit'; });
+      } else if (cell && !owner) {
+        // SEM DONO - red warning
+        cell.classList.add('tmx-namecell');
+        cell.style.background = '#d32f2f';
+        cell.style.color = '#fff';
         cell.querySelectorAll('a').forEach(a => { a.style.color = 'inherit'; });
       }
 
@@ -446,13 +1050,23 @@
         tag.textContent = ' ' + owner;
         tag.style.marginLeft = '6px';
         tag.style.fontWeight = '600';
-        const c = NAME_COLOR[owner];
-        if (c) {
-          tag.style.background = c.bg;
-          tag.style.color = c.fg;
-          tag.style.padding = '0 4px';
-          tag.style.borderRadius = '4px';
-        }
+        const c = getColorForName(owner);
+        tag.style.background = c.bg;
+        tag.style.color = c.fg;
+        tag.style.padding = '0 4px';
+        tag.style.borderRadius = '4px';
+        link.insertAdjacentElement('afterend', tag);
+        link.dataset[NAME_MARK_ATTR] = '1';
+      } else if (!owner && !link.dataset[NAME_MARK_ATTR]) {
+        const tag = document.createElement('span');
+        tag.textContent = ' SEM DONO';
+        tag.style.marginLeft = '6px';
+        tag.style.fontWeight = '700';
+        tag.style.background = '#fff';
+        tag.style.color = '#d32f2f';
+        tag.style.padding = '0 4px';
+        tag.style.borderRadius = '4px';
+        tag.style.border = '2px solid #d32f2f';
         link.insertAdjacentElement('afterend', tag);
         link.dataset[NAME_MARK_ATTR] = '1';
       }
@@ -461,93 +1075,10 @@
     });
   }
 
-  /* =========================================================
-   *  3) Marca "Solicitado por.Título" se for juiz/juíza
-   * =======================================================*/
-  const RE_MAGISTRADO = /\bju[ií]z(?:es|a)?(?:\s+de\s+direito)?\b/i;
-  const AID_SOLICITADO_POR = 'grid_header_RequestedByPerson.Title';
-
-  function getColumnSelectorByHeaderAid(aid) {
-      const headers = Array.from(document.querySelectorAll('.slick-header-columns .slick-header-column'));
-      const target = headers.find(h => h.getAttribute('data-aid') === aid);
-      let idx = -1;
-      if (target) idx = headers.indexOf(target);
-      else {
-          // fallback: search by normalized innerText containing a known label fragment
-          const normalizedAid = aid.toLowerCase().replace(/grid_header_/, '').replace(/_/g,' ');
-          const byText = headers.find(h => (h.textContent||'').toLowerCase().includes(normalizedAid));
-          if (byText) idx = headers.indexOf(byText);
-      }
-      if (idx < 0) return null;
-      return `.slick-row .slick-cell.l${idx}.r${idx}`;
-  }
-
-
-  function markMagistrateColumn(root=document) {
-    if (!prefs.magistradoOn) return;
-    const scope = getGridViewport(root);
-    const colSel = getColumnSelectorByHeaderAid(AID_SOLICITADO_POR);
-    if (!colSel) return;
-    scope.querySelectorAll(colSel).forEach(cell => {
-      const txt = (cell.textContent || '').trim();
-      if (RE_MAGISTRADO.test(txt)) cell.classList.add('tmx-juizdireito-hit');
-      else cell.classList.remove('tmx-juizdireito-hit');
-    });
-  }
+  /* (highlighting, magistrate marking and auto-tag features removed to keep script focused on team triage) */
 
   /* =========================================================
-   *  4) TAGs automáticas na coluna "Descrição"
-   * =======================================================*/
-  const AID_DESCRICAO = 'grid_header_Description';
-
-  const AUTO_TAG_RULES = [
-    { palavras:["mandado","oficial de justiça","central de mandos"], tag:"CEMAN" },
-    { palavras:["custas","taxa","diligência","diligências"],        tag:"CUSTAS" },
-    { palavras:["atp","automatização","automação","regra"],          tag:"ATP" },
-    { palavras:["cadastrar","cadastro"],                              tag:"CADASTROS" },
-    { palavras:["acesso","login","acessar","fatores","autenticador","autenticação","authenticator","senha"], tag:"LOGIN" },
-    { palavras:["Migrado","Migrados","Migração","Migrador","migrar"], tag:"MIGRADOR" },
-    { palavras:["Carta","Cartas"],                                    tag:"CORREIOS" },
-    { palavras:["DJEN"],                                              tag:"DJEN" },
-    { palavras:["Renajud","Sisbajud"],                                tag:"ACIONAMENTOS" },
-    { palavras:["Distribuição","Redistribuir","Remeter"],             tag:"DISTRIBUIÇÃO" },
-  ];
-
-  const hasLeadingTag = html => /\[\s*[A-Z]+\s*\]/.test(html.replace(/<[^>]+>/g,'').slice(0,24));
-
-  function tagDescriptionCellOnce(el) {
-    if (el.dataset.smaxTagged === '1') return;
-    const plain = el.textContent?.trim();
-    if (!plain) return;
-
-    const htmlAtual = el.innerHTML.trim();
-    if (hasLeadingTag(htmlAtual)) { el.dataset.smaxTagged = '1'; return; }
-
-    const n = normalizeText(plain);
-    for (const r of AUTO_TAG_RULES) {
-      if (r.palavras.some(p => n.includes(normalizeText(p)))) {
-        el.innerHTML = `<span class="tag-smax">${r.tag}</span> ${htmlAtual}`;
-        el.dataset.smaxTagged = '1';
-        break;
-      }
-    }
-  }
-
-  function applyAutoTagsInDescription() {
-    if (!prefs.autoTagsOn) return;
-    const colSel = getColumnSelectorByHeaderAid(AID_DESCRICAO);
-    if (!colSel) return;
-    const nodes = document.querySelectorAll(`${colSel}:not([data-smax-tagged])`);
-    const MAX_PER_TICK = 500;
-    let count = 0;
-    for (const el of nodes) {
-      tagDescriptionCellOnce(el);
-      if (++count >= MAX_PER_TICK) break;
-    }
-  }
-
-  /* =========================================================
-   *  5) Comentários auto-altura
+    *  Comentários auto-altura
    * =======================================================*/
   function initAutoHeightComments() {
     if (!prefs.enlargeCommentsOn) return;
@@ -572,7 +1103,7 @@
   }
 
   /* =========================================================
-   *  6) Recolher "Oferta de Catálogo" + remover seções
+   *  Recolher "Oferta de Catálogo" + remover seções
    * =======================================================*/
   function initSectionTweaks() {
     if (!prefs.collapseOn) return;
@@ -633,14 +1164,11 @@
   }
 
   /* =========================================================
-   *  7) Orquestração (um único observer com debounce)
+   *  Orquestração (um único observer com debounce)
    * =======================================================*/
   function runAllFeatures() {
     const work = () => {
-      applyHighlightsInGrid();
       applyNameBadges();
-      markMagistrateColumn();
-      applyAutoTagsInDescription();
     };
     if ('requestIdleCallback' in window) requestIdleCallback(work, { timeout: 500 });
     else setTimeout(work, 0);
@@ -743,5 +1271,6 @@
   initSectionTweaks();
   initOrchestrator();
   createSettingsUI();
+  initTriageHUD();
   initFlagUsersSkull(); // comente esta linha se não quiser a “caveira”
 })();
