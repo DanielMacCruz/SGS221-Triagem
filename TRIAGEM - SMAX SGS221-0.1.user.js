@@ -10,6 +10,7 @@
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        unsafeWindow
 // @downloadURL  https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/main/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
 // @updateURL    https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/main/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
 // @homepageURL  https://github.com/DanielMacCruz/SGS221-Triagem
@@ -18,6 +19,11 @@
 
 (() => {
   'use strict';
+
+  if (window.top && window.top !== window.self) return;
+
+  const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+  const getPageCKEditor = () => (pageWindow && pageWindow.CKEDITOR ? pageWindow.CKEDITOR : null);
 
   /* =========================================================
    * Preferences
@@ -91,7 +97,11 @@
     #smax-triage-hud-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
     #smax-triage-hud-header h3 { margin:0; font-size:18px; }
     #smax-triage-hud-body { background:#020617; border-radius:8px; padding:12px 14px; min-height:120px; flex:1; overflow:auto; }
-    #smax-triage-hud-footer { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+    #smax-triage-hud-footer { display:flex; flex-direction:column; gap:12px; }
+    .smax-triage-top-row { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:flex-start; }
+    .smax-triage-control-stack { display:flex; flex-direction:column; gap:6px; }
+    .smax-triage-main-actions { display:flex; flex-direction:column; gap:4px; align-items:flex-end; min-width:220px; }
+    .smax-triage-main-actions-buttons { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
     .smax-triage-primary { padding:8px 16px; border-radius:999px; border:none; cursor:pointer; background:#22c55e; color:#022c22; font-weight:600; }
     .smax-triage-secondary { padding:6px 12px; border-radius:999px; border:1px solid #4b5563; background:transparent; color:#e5e7eb; cursor:pointer; font-size:13px; }
     .smax-triage-chip { transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease; }
@@ -108,9 +118,20 @@
     #smax-triage-ticket-details { background:#0f172a; border:1px solid #1f2937; border-radius:8px; padding:10px 12px; min-height:120px; max-height:260px; overflow:auto; }
     #smax-triage-ticket-details img { max-width:100%; height:auto; display:block; border-radius:6px; margin-top:6px; }
     #smax-triage-hud-body .smax-triage-desc { max-height:160px; overflow:auto; padding:6px 8px; border-radius:6px; background:#020617; border:1px solid #1f2937; }
-    #smax-triage-quickreply-card { border:1px solid #1f2937; border-radius:8px; padding:10px 12px; background:#020617; }
+    #smax-triage-quickreply-card { border:1px solid #1f2937; border-radius:8px; padding:10px 12px; background:#020617; width:100%; }
     #smax-triage-quickreply-card textarea { width:100%; min-height:140px; resize:vertical; background:#020617; color:#e5e7eb; border:1px solid #374151; border-radius:6px; padding:8px; font-family:"Segoe UI",sans-serif; }
-    #smax-triage-quickreply-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    #smax-quickreply-status { font-size:11px; margin-top:6px; color:#facc15; display:none; }
+    #smax-quickreply-status[data-tone="success"] { color:#86efac; }
+    #smax-quickreply-status[data-tone="error"] { color:#fca5a5; }
+    #smax-quickreply-status[data-tone="warn"] { color:#fbbf24; }
+    #smax-quickreply-status[data-tone="info"] { color:#facc15; }
+    #smax-triage-quickreply-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; justify-content:flex-end; width:100%; }
+    #smax-triage-hud .cke { z-index:1000000 !important; }
+    body .cke_panel, body .cke_combopanel, body .cke_panel_block { z-index:1000003 !important; }
+    body .cke_dialog, body .cke_dialog_container, body .cke_dialog_body, body .cke_dialog_background_cover { z-index:1000005 !important; }
+    body .cke_colorauto .cke_colorbox_color { background-color:#000 !important; }
+    body .cke_colorauto .cke_colorbox { border-color:#000 !important; }
+    body .cke_colorauto { color:#f5f5f5 !important; }
   `);
 
   /* =========================================================
@@ -189,8 +210,9 @@
     };
 
     const locateSolutionEditor = () => {
-      if (!(window.CKEDITOR && CKEDITOR.instances)) return null;
-      return Object.values(CKEDITOR.instances).find((inst) => {
+      const ck = getPageCKEditor();
+      if (!(ck && ck.instances)) return null;
+      return Object.values(ck.instances).find((inst) => {
         const el = inst.element && inst.element.$;
         if (!el) return false;
         const id = el.id || '';
@@ -384,6 +406,11 @@
       const subjectText = fullText.split('\n')[0] || '';
       const hasInlineImage = /<img\b/i.test(String(descHtml));
 
+      const solutionHtml = props.Solution || '';
+      const solutionDiv = document.createElement('div');
+      solutionDiv.innerHTML = String(solutionHtml);
+      const solutionText = (solutionDiv.textContent || solutionDiv.innerText || '').trim();
+
       const idNum = parseInt(id.replace(/\D/g, ''), 10);
       const existing = triageCache.get(id) || {};
       triageCache.set(id, Object.assign({}, existing, {
@@ -395,7 +422,9 @@
         subjectText,
         descriptionHtml: String(descHtml),
         descriptionText: fullText,
-        hasInlineImage
+        hasInlineImage,
+        solutionHtml: String(solutionHtml),
+        solutionText
       }));
     };
 
@@ -567,6 +596,20 @@
       }
     };
 
+    const updateCachedSolution = (id, html) => {
+      const key = String(id || '');
+      if (!key || !triageCache.has(key)) return;
+      const current = triageCache.get(key) || {};
+      const safeHtml = html != null ? String(html) : '';
+      const tmp = document.createElement('div');
+      tmp.innerHTML = safeHtml;
+      const text = (tmp.textContent || tmp.innerText || '').trim();
+      triageCache.set(key, Object.assign({}, current, {
+        solutionHtml: safeHtml,
+        solutionText: text
+      }));
+    };
+
     return {
       triageCache,
       getTriageQueueSnapshot: () => triageIds.slice(),
@@ -578,6 +621,7 @@
       ensureRequestPayload,
       upsertTriageEntryFromProps,
       ingestRequestDetailPayload,
+      updateCachedSolution,
       onQueueUpdate: (fn) => {
         if (typeof fn === 'function') queueListeners.add(fn);
       }
@@ -1344,6 +1388,13 @@
     let quickReplyEditorAttempts = 0;
     let quickReplyEditorConfig = null;
     let globalCkSnapshot = null;
+    let nativeWatcherArmed = false;
+    let quickReplyStatusTimer = null;
+    let quickReplyPendingStatus = null;
+    let quickReplyFallbackNotified = false;
+    let quickReplyEditorPollTimer = null;
+    let activeTicketId = null;
+    let editorBaselineHtml = '';
 
     const urgencyMap = {
       low: { Urgency: 'NoDisruption', ImpactScope: 'SingleUser' },
@@ -1353,6 +1404,45 @@
     };
 
     const getQuickReplyField = () => (backdrop ? backdrop.querySelector('#smax-triage-quickreply-editor') : null);
+    const getQuickReplyStatusEl = () => (backdrop ? backdrop.querySelector('#smax-quickreply-status') : null);
+
+    const applyQuickReplyStatus = ({ message, tone = 'info', persist = false }) => {
+      const el = getQuickReplyStatusEl();
+      if (!el) return false;
+      if (quickReplyStatusTimer) {
+        clearTimeout(quickReplyStatusTimer);
+        quickReplyStatusTimer = null;
+      }
+      el.textContent = message || '';
+      el.dataset.tone = tone;
+      if (!message) {
+        el.style.display = 'none';
+        return true;
+      }
+      el.style.display = 'block';
+      if (!persist) {
+        quickReplyStatusTimer = setTimeout(() => {
+          const target = getQuickReplyStatusEl();
+          if (target) target.style.display = 'none';
+          quickReplyStatusTimer = null;
+        }, 4500);
+      }
+      return true;
+    };
+
+    const setQuickReplyStatus = (message, tone = 'info', persist = false) => {
+      const payload = { message, tone, persist };
+      if (!applyQuickReplyStatus(payload)) {
+        quickReplyPendingStatus = payload;
+      } else {
+        quickReplyPendingStatus = null;
+      }
+    };
+
+    const flushQuickReplyStatus = () => {
+      if (!quickReplyPendingStatus) return;
+      if (applyQuickReplyStatus(quickReplyPendingStatus)) quickReplyPendingStatus = null;
+    };
 
     const setQuickReplyHtml = (html) => {
       quickReplyHtml = html || '';
@@ -1362,6 +1452,7 @@
         const field = getQuickReplyField();
         if (field) field.value = quickReplyHtml;
       }
+      if (backdrop) refreshButtons();
     };
 
     const readQuickReplyHtml = () => {
@@ -1370,6 +1461,32 @@
       }
       const field = getQuickReplyField();
       return field ? field.value : '';
+    };
+
+    const normalizeHtml = (html) => (html || '')
+      .replace(/\r/g, '')
+      .replace(/\u00a0/gi, ' ')
+      .trim();
+
+    const clearQuickReplyState = () => {
+      editorBaselineHtml = '';
+      setQuickReplyHtml('');
+      quickReplyHtml = '';
+    };
+
+    const syncQuickReplyBaseline = (html) => {
+      const safe = html != null ? String(html) : '';
+      editorBaselineHtml = normalizeHtml(safe);
+      setQuickReplyHtml(safe);
+      quickReplyHtml = safe;
+    };
+
+    const hasUnsavedSolution = () => normalizeHtml(readQuickReplyHtml()) !== editorBaselineHtml;
+
+    const handleQuickReplyChange = (nextHtml) => {
+      quickReplyHtml = nextHtml != null ? nextHtml : readQuickReplyHtml();
+      refreshButtons();
+      setBaselineStatus();
     };
 
     const deepClone = (value) => {
@@ -1441,10 +1558,39 @@
       return cfg;
     };
 
+    const appendEditorCss = (config, cssText) => {
+      if (!config || !cssText) return;
+      const dataUri = `data:text/css,${encodeURIComponent(cssText)}`;
+      if (Array.isArray(config.contentsCss)) {
+        config.contentsCss.push(dataUri);
+      } else if (typeof config.contentsCss === 'string' && config.contentsCss.length) {
+        config.contentsCss = [config.contentsCss, dataUri];
+      } else {
+        config.contentsCss = [dataUri];
+      }
+    };
+
+    const pickAnyEditorInstance = () => {
+      const ck = getPageCKEditor();
+      if (!(ck && ck.instances)) return null;
+      const list = Object.values(ck.instances);
+      if (!list.length) return null;
+      const target = list.find((inst) => {
+        try {
+          const id = `${inst.name || ''} ${inst.element && inst.element.getName ? inst.element.getName() : ''}`;
+          return /solution|solucao|plCkeditor/i.test(id);
+        } catch {
+          return false;
+        }
+      });
+      return target || list[0];
+    };
+
     const captureGlobalConfigSnapshot = () => {
-      if (globalCkSnapshot || !(window.CKEDITOR && CKEDITOR.config)) return globalCkSnapshot;
+      const ck = getPageCKEditor();
+      if (globalCkSnapshot || !(ck && ck.config)) return globalCkSnapshot;
       try {
-        globalCkSnapshot = copyConfigKeys(CKEDITOR.config) || null;
+        globalCkSnapshot = copyConfigKeys(ck.config) || null;
       } catch (err) {
         console.warn('[SMAX] Failed to snapshot global CKEditor config:', err);
         globalCkSnapshot = null;
@@ -1454,15 +1600,51 @@
 
     const captureQuickReplyConfig = () => {
       if (quickReplyEditorConfig) return quickReplyEditorConfig;
-      if (window.CKEDITOR && CKEDITOR.instances) {
-        const native = Utils.locateSolutionEditor ? Utils.locateSolutionEditor() : null;
+      const ck = getPageCKEditor();
+      if (ck && ck.instances) {
+        const native = (Utils.locateSolutionEditor && Utils.locateSolutionEditor()) || pickAnyEditorInstance();
         if (native && native.config) {
           quickReplyEditorConfig = copyConfigKeys(native.config);
-          if (quickReplyEditorConfig) return quickReplyEditorConfig;
+          if (quickReplyEditorConfig) {
+            quickReplyFallbackNotified = false;
+            return quickReplyEditorConfig;
+          }
         }
       }
       quickReplyEditorConfig = captureGlobalConfigSnapshot();
+      if (quickReplyEditorConfig && !quickReplyFallbackNotified) {
+        quickReplyFallbackNotified = true;
+        setQuickReplyStatus('CKEditor nativo ainda não foi aberto; usando configuração global detectada.', 'warn', true);
+      }
       return quickReplyEditorConfig;
+    };
+
+    const hookNativeEditors = () => {
+      if (nativeWatcherArmed) return;
+      nativeWatcherArmed = true;
+      setQuickReplyStatus('Aguardando o CKEditor nativo para copiar a configuração...', 'info', true);
+      const attempt = () => {
+        const ck = getPageCKEditor();
+        if (!(ck && ck.on)) {
+          setTimeout(attempt, 800);
+          return;
+        }
+        const tryCapture = (editor) => {
+          if (!editor || !editor.config) return;
+          const cfg = copyConfigKeys(editor.config);
+          if (cfg) {
+            quickReplyEditorConfig = cfg;
+            quickReplyFallbackNotified = false;
+            setQuickReplyStatus('Configuração do CKEditor clonada. Inicializando editor rápido...', 'info');
+            if (!quickReplyEditor) ensureQuickReplyEditor();
+          }
+        };
+        Object.values(ck.instances || {}).forEach(tryCapture);
+        ck.on('instanceReady', (evt) => {
+          tryCapture(evt && evt.editor);
+        });
+      };
+      attempt();
     };
 
     const buildQuickReplyConfig = () => {
@@ -1470,78 +1652,84 @@
       if (captured) return deepClone(captured);
       const fallback = defaultQuickReplyConfig();
       ensureSourceButton(fallback.toolbar);
+      if (!quickReplyFallbackNotified) {
+        quickReplyFallbackNotified = true;
+        setQuickReplyStatus('CKEditor nativo não detectado; usando configuração padrão.', 'warn', true);
+      }
       return fallback;
     };
 
     const ensureQuickReplyEditor = () => {
-      if (!window.CKEDITOR || !CKEDITOR.replace || quickReplyEditor) return;
+      const ck = getPageCKEditor();
+      if (!ck || !ck.replace || quickReplyEditor) return;
       const field = getQuickReplyField();
       if (!field) return;
       const config = buildQuickReplyConfig();
       if (!config) return;
       try {
+        setQuickReplyStatus('Inicializando editor rico...', 'info', true);
         const instanceConfig = Object.assign({ resize_enabled: true }, config);
-        quickReplyEditor = CKEDITOR.replace(field, instanceConfig);
+        appendEditorCss(instanceConfig, 'body{color:#000000 !important;}');
+        quickReplyEditor = ck.replace(field, instanceConfig);
+        const enforceDefaultColor = () => {
+          try {
+            if (!quickReplyEditor) return;
+            const editable = typeof quickReplyEditor.editable === 'function' ? quickReplyEditor.editable() : null;
+            if (editable && typeof editable.setStyle === 'function') {
+              editable.setStyle('color', '#000000');
+              editable.removeClass('smax-quickreply-muted');
+            }
+          } catch (err) {
+            console.warn('[SMAX] Failed to enforce default CKEditor text color:', err);
+          }
+        };
         quickReplyEditor.on('instanceReady', () => {
+          enforceDefaultColor();
           quickReplyEditor.setData(quickReplyHtml);
+          setQuickReplyStatus('Editor rico pronto. Texto sincronizado automaticamente.', 'success');
         });
+        quickReplyEditor.on('contentDom', enforceDefaultColor);
         quickReplyEditor.on('change', () => {
-          quickReplyHtml = quickReplyEditor.getData();
+          handleQuickReplyChange(quickReplyEditor.getData());
         });
       } catch (err) {
         console.warn('[SMAX] Failed to init quick reply editor:', err);
+        setQuickReplyStatus('Não consegui carregar o CKEditor aqui. Campo permanece simples.', 'error', true);
       }
     };
 
     const scheduleQuickReplyEditor = () => {
-      if (quickReplyEditor || quickReplyEditorAttempts > 40) return;
+      if (quickReplyEditor) return;
+      if (quickReplyEditorPollTimer) clearTimeout(quickReplyEditorPollTimer);
       quickReplyEditorAttempts += 1;
-      if (window.CKEDITOR && CKEDITOR.replace) ensureQuickReplyEditor();
-      if (!quickReplyEditor) setTimeout(scheduleQuickReplyEditor, 800);
-    };
-
-    const copyQuickReply = () => {
-      const html = readQuickReplyHtml().trim();
-      if (!html) {
-        setStatus('Digite a resposta antes de copiar.', 2000);
-        return;
-      }
-      const tmp = document.createElement('div');
-      tmp.innerHTML = html;
-      const plain = tmp.textContent || tmp.innerText || html;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(plain).then(() => setStatus('Resposta copiada para a área de transferência.', 2000)).catch(() => setStatus('Não consegui copiar automaticamente. Selecione e copie manualmente.', 3000));
+      const ck = getPageCKEditor();
+      const ckReady = Boolean(ck && ck.replace);
+      if (ckReady) {
+        ensureQuickReplyEditor();
       } else {
-        try {
-          const field = document.createElement('textarea');
-          field.value = plain;
-          document.body.appendChild(field);
-          field.select();
-          document.execCommand('copy');
-          document.body.removeChild(field);
-          setStatus('Resposta copiada para a área de transferência.', 2000);
-        } catch (err) {
-          console.warn('[SMAX] Clipboard copy fallback failed:', err);
-          setStatus('Não consegui copiar automaticamente. Selecione e copie manualmente.', 3000);
+        if (quickReplyEditorAttempts === 1) {
+          setQuickReplyStatus('Carregando scripts do CKEditor. A resposta rápida vira editor rico em instantes...', 'info', true);
         }
       }
+      if (!quickReplyEditor) {
+        const delay = Math.min(1200, 600 + quickReplyEditorAttempts * 40);
+        quickReplyEditorPollTimer = setTimeout(scheduleQuickReplyEditor, delay);
+      } else {
+        quickReplyEditorPollTimer = null;
+      }
     };
 
-    const clearQuickReply = () => {
-      setQuickReplyHtml('');
-      setStatus('Resposta rápida limpa.', 1500);
-    };
-
-    const sendQuickReplyToSolution = () => {
+    const respondQuickReply = () => {
       const html = readQuickReplyHtml().trim();
-      if (!html) {
-        setStatus('Digite a resposta antes de enviar.', 2000);
+      if (!activeTicketId) {
+        setQuickReplyStatus('Nenhum chamado selecionado para responder.', 'error');
         return;
       }
-      setStatus('Enviando resposta para o editor de Solução...');
-      Utils.pushSolutionHtml(html).then((ok) => {
-        setStatus(ok ? 'Resposta aplicada ao campo Solução.' : 'Não encontrei o editor de Solução.', ok ? 2000 : 3500);
-      });
+      if (!html) {
+        setQuickReplyStatus('Digite a resposta antes de responder.', 'warn');
+        return;
+      }
+      setQuickReplyStatus('Resposta pronta. Clique em Salvar para gravá-la no chamado.', 'success');
     };
 
     const captureSelectedIdFromDom = () => {
@@ -1624,7 +1812,7 @@
       stagedState.parentSelected = false;
     };
 
-    const anyStaged = () => stagedState.urgency || stagedState.assign || stagedState.parentSelected;
+    const anyStaged = () => stagedState.urgency || stagedState.assign || stagedState.parentSelected || hasUnsavedSolution();
 
     const ownerForCurrent = () => {
       const item = currentItem();
@@ -1637,6 +1825,7 @@
       const bodyEl = backdrop.querySelector('#smax-triage-hud-body');
       const ticketDetailsEl = bodyEl ? bodyEl.querySelector('#smax-triage-ticket-details') : null;
       const statusEl = backdrop.querySelector('#smax-triage-status');
+      const prevBtn = backdrop.querySelector('#smax-triage-prev');
       const nextBtn = backdrop.querySelector('#smax-triage-next');
       const commitBtn = backdrop.querySelector('#smax-triage-commit');
       const commitFocusBtn = backdrop.querySelector('#smax-triage-commit-and-focus');
@@ -1649,12 +1838,14 @@
         crit: backdrop.querySelector('#smax-triage-urg-crit')
       };
       const assignBtn = backdrop.querySelector('#smax-triage-assign-owner');
+      const respondBtn = backdrop.querySelector('#smax-quickreply-respond');
 
       if (!triageQueue.length) {
         triageIndex = -1;
         if (ticketDetailsEl) ticketDetailsEl.innerHTML = '<div style="font-size:14px;color:#e5e7eb;">Nenhum chamado encontrado na lista atual.</div>';
         statusEl.textContent = 'Verifique se a visão contém ID, Descrição e Hora de Criação.';
-        nextBtn.disabled = true;
+        if (nextBtn) nextBtn.disabled = true;
+        if (prevBtn) prevBtn.disabled = true;
         Object.values(urgencyButtons).forEach((btn) => { btn.disabled = true; btn.dataset.active = 'false'; });
         assignBtn.disabled = true;
         assignBtn.dataset.active = 'false';
@@ -1662,13 +1853,21 @@
         btnLinkGlobal.dataset.active = 'false';
         commitBtn.disabled = true;
         commitFocusBtn.disabled = true;
+        activeTicketId = null;
+        clearQuickReplyState();
+        if (respondBtn) respondBtn.disabled = true;
         return;
       }
 
-      nextBtn.disabled = false;
+      if (nextBtn) nextBtn.disabled = false;
+      if (prevBtn) prevBtn.disabled = false;
       const item = currentItem();
+      activeTicketId = item ? item.idText : null;
+      const pendingRequestId = activeTicketId;
       resetStaged();
       if (inputGlobal) inputGlobal.value = '';
+      clearQuickReplyState();
+      setQuickReplyStatus('Carregando solução do chamado selecionado...', 'info', true);
 
       if (ticketDetailsEl) {
         ticketDetailsEl.innerHTML = `
@@ -1678,14 +1877,17 @@
         `;
       }
 
-      DataRepository.ensureRequestPayload(item.idText).then((full) => {
+      DataRepository.ensureRequestPayload(pendingRequestId).then((full) => {
+        if (!pendingRequestId || activeTicketId !== pendingRequestId) return;
         if (!full) {
-          if (!ticketDetailsEl) return;
-          ticketDetailsEl.innerHTML = `
-            <div style="font-size:14px;color:#fecaca;">
-              Não foi possível carregar os detalhes completos deste chamado.
-            </div>
-          `;
+          if (ticketDetailsEl) {
+            ticketDetailsEl.innerHTML = `
+              <div style="font-size:14px;color:#fecaca;">
+                Não foi possível carregar os detalhes completos deste chamado.
+              </div>
+            `;
+          }
+          setQuickReplyStatus('Não consegui carregar a solução deste chamado.', 'error', true);
           return;
         }
         const missing = [];
@@ -1710,6 +1912,10 @@
             <div class="smax-triage-desc">${descDisplay}</div>
           </div>
         `;
+
+        const solutionHtml = full.solutionHtml != null ? full.solutionHtml : '';
+        syncQuickReplyBaseline(solutionHtml);
+        setQuickReplyStatus(solutionHtml ? 'Solução atual carregada deste chamado.' : 'Chamado ainda não possui solução registrada.', solutionHtml ? 'success' : 'info');
       });
 
       Object.entries(urgencyButtons).forEach(([key, btn]) => {
@@ -1784,6 +1990,9 @@
       const canCommit = !!anyStaged();
       commitBtn.disabled = !canCommit;
       commitFocusBtn.disabled = !canCommit;
+
+      const respondBtn = backdrop.querySelector('#smax-quickreply-respond');
+      if (respondBtn) respondBtn.disabled = !readQuickReplyHtml().trim();
     };
 
     const setBaselineStatus = () => {
@@ -1799,6 +2008,7 @@
       if (stagedState.urgency) stagedBits.push('urgência');
       if (stagedState.assign) stagedBits.push('atribuir');
       if (stagedState.parentSelected && stagedState.parentId) stagedBits.push('pai');
+      if (hasUnsavedSolution()) stagedBits.push('resposta não salva');
       const pending = stagedBits.length ? ` Pendências: ${stagedBits.join(', ')}.` : '';
       statusEl.textContent = `Chamado ${position} de ${total} na visão atual.${pending}`;
     };
@@ -1828,6 +2038,8 @@
       if (!item) return;
       const props = { Id: String(item.idText) };
       if (stagedState.urgency) Object.assign(props, urgencyMap[stagedState.urgency]);
+      const solutionHtml = hasUnsavedSolution() ? readQuickReplyHtml() : '';
+      if (solutionHtml) props.Solution = solutionHtml;
 
       let ownerName = null;
       if (stagedState.assign) ownerName = ownerForCurrent();
@@ -1843,7 +2055,7 @@
       }
 
       const doGlobal = stagedState.parentSelected && stagedState.parentId;
-      if (!stagedState.urgency && !props.ExpertAssignee && !doGlobal) {
+      if (!stagedState.urgency && !props.ExpertAssignee && !doGlobal && !props.Solution) {
         setStatus('Nada para gravar.', 2500);
         return;
       }
@@ -1856,7 +2068,7 @@
 
       setStatus('Gravando alterações...');
       const tasks = [];
-      if (stagedState.urgency || props.ExpertAssignee) tasks.push(Api.postUpdateRequest(props));
+      if (stagedState.urgency || props.ExpertAssignee || props.Solution) tasks.push(Api.postUpdateRequest(props));
       if (doGlobal) {
         tasks.push(
           Api.postCreateRequestCausesRequest(stagedState.parentId, props.Id).then((relRes) => {
@@ -1867,6 +2079,10 @@
       }
       Promise.all(tasks).then((results) => {
         const hadError = results.some((res) => !res || (res.meta && res.meta.completion_status !== 'OK'));
+        if (!hadError && props.Solution) {
+          syncQuickReplyBaseline(props.Solution);
+          if (DataRepository.updateCachedSolution) DataRepository.updateCachedSolution(props.Id, props.Solution);
+        }
         setStatus(hadError ? 'Algumas alterações falharam.' : 'Alterações gravadas com sucesso.', hadError ? 3000 : 2000);
         advanceQueue(focusSolution);
       }).catch(() => {
@@ -1883,7 +2099,16 @@
       statusTimer = setTimeout(() => setBaselineStatus(), duration);
     };
 
-    const advanceQueue = (focusSolution) => {
+    const navigateQueue = (delta, focusSolution) => {
+      if (hasUnsavedSolution()) {
+        const discard = window.confirm('A resposta atual não foi salva. Deseja descartá-la antes de continuar?');
+        if (!discard) {
+          setQuickReplyStatus('Navegação cancelada para preservar a resposta não salva.', 'warn');
+          return;
+        }
+        clearQuickReplyState();
+        setQuickReplyStatus('Resposta descartada. Carregando outro chamado...', 'info');
+      }
       if (!triageQueue.length) {
         render();
         if (focusSolution) {
@@ -1901,16 +2126,18 @@
           triageQueue = rebuilt;
           if (currentId) {
             const nextIndex = rebuilt.findIndex((entry) => entry.idText === currentId);
-            triageIndex = nextIndex >= 0 ? (nextIndex + 1) % rebuilt.length : 0;
+            if (nextIndex >= 0) triageIndex = (nextIndex + delta + rebuilt.length) % rebuilt.length;
+            else triageIndex = delta > 0 ? 0 : rebuilt.length - 1;
           } else {
-            triageIndex = 0;
+            triageIndex = delta > 0 ? 0 : rebuilt.length - 1;
           }
         } else {
           triageQueue = rebuilt;
           triageIndex = -1;
         }
-      } else {
-        triageIndex = (triageIndex + 1) % triageQueue.length;
+      } else if (triageQueue.length) {
+        const length = triageQueue.length;
+        triageIndex = (triageIndex + delta + length) % length;
       }
 
       render();
@@ -1919,6 +2146,9 @@
         closeHud();
       }
     };
+
+    const advanceQueue = (focusSolution) => navigateQueue(1, focusSolution);
+    const retreatQueue = () => navigateQueue(-1, false);
 
     const openHud = () => {
       backdrop.style.display = 'flex';
@@ -1942,6 +2172,7 @@
 
     const init = () => {
       if (startBtn) return;
+      hookNativeEditors();
       startBtn = document.createElement('button');
       startBtn.id = 'smax-triage-start-btn';
       startBtn.textContent = 'Iniciar triagem';
@@ -1961,62 +2192,65 @@
             </div>
           </div>
           <div id="smax-triage-hud-footer">
-            <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
-              <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-low" id="smax-triage-urg-low" disabled>Baixa</button>
-                <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-med" id="smax-triage-urg-med" disabled>Média</button>
-                <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-high" id="smax-triage-urg-high" disabled>Alta</button>
-                <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
-              </div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-assign-owner" disabled>Sem dono</button>
-              </div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;font-size:12px;color:#e5e7eb;">
-                <input type="text" id="smax-triage-global-id" placeholder="ID do global"
-                      style="width:130px;padding:4px 6px;border-radius:999px;border:1px solid #4b5563;background:#020617;color:#e5e7eb;font-size:12px;" />
-                <button type="button" class="smax-triage-secondary smax-triage-chip" id="smax-triage-link-global" disabled>Vincular</button>
-              </div>
-              <div id="smax-triage-quickreply-card">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <strong>Resposta rápida</strong>
-                  <span style="font-size:11px;color:#9ca3af;">Use para preparar um retorno antes de enviar.</span>
+            <div class="smax-triage-top-row">
+              <div class="smax-triage-control-stack">
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-low" id="smax-triage-urg-low" disabled>Baixa</button>
+                  <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-med" id="smax-triage-urg-med" disabled>Média</button>
+                  <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-high" id="smax-triage-urg-high" disabled>Alta</button>
+                  <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
                 </div>
-                <textarea id="smax-triage-quickreply-editor" placeholder="Digite aqui sua resposta..."></textarea>
-                <div id="smax-triage-quickreply-actions">
-                  <button type="button" class="smax-triage-primary" id="smax-quickreply-send">Enviar p/ Solução</button>
-                  <button type="button" class="smax-triage-secondary" id="smax-quickreply-copy">Copiar texto</button>
-                  <button type="button" class="smax-triage-secondary" id="smax-quickreply-clear">Limpar</button>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-assign-owner" disabled>Sem dono</button>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;font-size:12px;color:#e5e7eb;">
+                  <input type="text" id="smax-triage-global-id" placeholder="ID do global"
+                        style="width:130px;padding:4px 6px;border-radius:999px;border:1px solid #4b5563;background:#020617;color:#e5e7eb;font-size:12px;" />
+                  <button type="button" class="smax-triage-secondary smax-triage-chip" id="smax-triage-link-global" disabled>Vincular</button>
+                </div>
+              </div>
+              <div class="smax-triage-main-actions">
+                <div id="smax-triage-real-flag" style="font-size:11px;font-weight:600;color:#f97316;display:none;">MODO REAL ATIVO</div>
+                <div class="smax-triage-main-actions-buttons">
+                  <button type="button" class="smax-triage-secondary" id="smax-triage-prev" disabled>Chamado anterior</button>
+                  <button type="button" class="smax-triage-secondary" id="smax-triage-next" disabled>Próximo chamado</button>
+                  <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>Salvar</button>
+                  <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit-and-focus" disabled>Salvar e Editar →</button>
                 </div>
               </div>
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-              <div id="smax-triage-real-flag" style="font-size:11px;font-weight:600;color:#f97316;display:none;">MODO REAL ATIVO</div>
-              <div style="display:flex;flex-direction:row;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
-                <button type="button" class="smax-triage-secondary" id="smax-triage-next" disabled>Próximo chamado</button>
-                <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>Salvar</button>
-                <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit-and-focus" disabled>Salvar e Editar →</button>
+            <div id="smax-triage-quickreply-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong>Resposta rápida</strong>
+                <span style="font-size:11px;color:#9ca3af;">Use para preparar um retorno antes de enviar.</span>
               </div>
-              <div id="smax-triage-status">Fila de triagem ainda não inicializada.</div>
+              <textarea id="smax-triage-quickreply-editor" placeholder="Digite aqui sua resposta..."></textarea>
+              <div id="smax-quickreply-status" style="display:none;font-size:11px;margin-top:6px;color:#facc15;"></div>
+              <div id="smax-triage-quickreply-actions">
+                <button type="button" class="smax-triage-primary" id="smax-quickreply-respond">Responder</button>
+              </div>
             </div>
+            <div id="smax-triage-status">Fila de triagem ainda não inicializada.</div>
           </div>
         </div>
       `;
       document.body.appendChild(backdrop);
+      flushQuickReplyStatus();
 
       startBtn.addEventListener('click', openHud);
       backdrop.querySelector('#smax-triage-close').addEventListener('click', closeHud);
       backdrop.addEventListener('click', (event) => { if (event.target === backdrop) closeHud(); });
+      const prevBtn = backdrop.querySelector('#smax-triage-prev');
+      if (prevBtn) prevBtn.addEventListener('click', () => retreatQueue());
       backdrop.querySelector('#smax-triage-next').addEventListener('click', () => advanceQueue(false));
       backdrop.querySelector('#smax-triage-commit').addEventListener('click', () => commit(false));
       backdrop.querySelector('#smax-triage-commit-and-focus').addEventListener('click', () => commit(true));
       const quickTextarea = backdrop.querySelector('#smax-triage-quickreply-editor');
-      if (quickTextarea) quickTextarea.addEventListener('input', () => { if (!quickReplyEditor) quickReplyHtml = quickTextarea.value; });
-      const copyBtn = backdrop.querySelector('#smax-quickreply-copy');
-      if (copyBtn) copyBtn.addEventListener('click', copyQuickReply);
-      const clearBtn = backdrop.querySelector('#smax-quickreply-clear');
-      if (clearBtn) clearBtn.addEventListener('click', clearQuickReply);
-      const sendBtn = backdrop.querySelector('#smax-quickreply-send');
-      if (sendBtn) sendBtn.addEventListener('click', sendQuickReplyToSolution);
+      if (quickTextarea) quickTextarea.addEventListener('input', () => {
+        if (!quickReplyEditor) handleQuickReplyChange(quickTextarea.value);
+      });
+      const respondBtn = backdrop.querySelector('#smax-quickreply-respond');
+      if (respondBtn) respondBtn.addEventListener('click', respondQuickReply);
       scheduleQuickReplyEditor();
     };
 
