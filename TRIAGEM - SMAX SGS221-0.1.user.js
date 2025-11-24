@@ -124,7 +124,7 @@
     .smax-urg-med[data-active="true"]  { background:#fb923c;color:#111827;border-color:#fb923c; }
     .smax-urg-high[data-active="true"] { background:#f97316;color:#111827;border-color:#f97316; }
     .smax-urg-crit[data-active="true"] { background:#ef4444;color:#fee2e2;border-color:#ef4444; }
-    #smax-triage-assign-owner[data-active="ready"] { background:#bbf7d0;color:#14532d;border-color:#bbf7d0; }
+    #smax-triage-assign-owner[data-active="ready"] { background:#ababab;color:#808080;border-color:#ababab; }
     #smax-triage-assign-owner[data-active="selected"] { background:#22c55e;color:#022c22;border-color:#22c55e; }
     #smax-triage-link-global[data-active="ready"] { background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe; }
     #smax-triage-link-global[data-active="selected"] { background:#3b82f6;color:#e5f0ff;border-color:#3b82f6; }
@@ -972,7 +972,7 @@
             tag.style.background = bg;
             tag.style.color = fg;
           } else {
-            tag.textContent = ' SEM DONO';
+            tag.textContent = 'SEM DONO (verifique configurações)';
             tag.style.background = '#fff';
             tag.style.color = '#d32f2f';
             tag.style.border = '2px solid #d32f2f';
@@ -1459,7 +1459,7 @@
     const urgencyMap = {
       low: { Urgency: 'NoDisruption', ImpactScope: 'SingleUser' },
       med: { Urgency: 'SlightDisruption', ImpactScope: 'SiteOrDepartment' },
-      high: { Urgency: 'SignificantDisruption', ImpactScope: 'Enterprise' },
+      high: { Urgency: 'TotalLossOfService', ImpactScope: 'SiteOrDepartment' },
       crit: { Urgency: 'TotalLossOfService', ImpactScope: 'Enterprise' }
     };
 
@@ -1998,7 +1998,7 @@
         if (!full.createdText) missing.push('Hora de Criação');
         const warning = missing.length
           ? `<div style="margin-bottom:6px;padding:6px 8px;border-radius:6px;background:#7f1d1d;color:#fee2e2;font-size:12px;">
-               Aviso: faltam ${missing.join(', ')} na visão atual.
+               Faltam as colunas: ${missing.join(', ')} na visão atual.
              </div>`
           : '';
         const vipBadge = full.isVip ? '<span style="margin-left:8px;padding:2px 6px;border-radius:999px;background:#facc15;color:#854d0e;font-size:11px;font-weight:700;">VIP</span>' : '';
