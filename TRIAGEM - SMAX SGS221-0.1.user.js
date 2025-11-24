@@ -4,7 +4,6 @@
 // @version      0.4
 // @description  Interface enhancements for triagem workflow
 // @author       YOU
-// @match        https://suporte.tjsp.jus.br/saw/*
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
 // @run-at       document-start
 // @grant        GM_addStyle
@@ -38,7 +37,8 @@
       ausentes: [],
       nameColors: {},
       enableRealWrites: false,
-      defaultGlobalChangeId: ''
+      defaultGlobalChangeId: '',
+      personalFinalsRaw: ''
     };
 
     const state = JSON.parse(JSON.stringify(defaults));
@@ -87,21 +87,35 @@
     .smax-absent-box { width:14px; height:14px; border:1px solid #555; border-radius:2px; background:#fff; box-sizing:border-box; }
     .smax-absent-input:checked + .smax-absent-box { background:#d32f2f; border-color:#d32f2f; box-shadow:0 0 0 1px #d32f2f; }
 
+    #smax-settings-btn { width:50px; height:50px; border-radius:50%; border:none; background:#0f172a; color:#f8fafc; font-size:26px; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px rgba(0,0,0,.35); cursor:pointer; }
+    #smax-settings-btn:hover { background:#1f2937; }
     #smax-refresh-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 999998; display: none; align-items: center; justify-content: center; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     #smax-refresh-overlay-inner { width:70px; height:70px; border-radius:50%; background:#34c759; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px rgba(255,255,255,.35), 0 0 16px rgba(52,199,89,.8); }
     #smax-refresh-now { width:46px; height:46px; border-radius:50%; border:none; background:transparent; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:26px; }
 
     #smax-triage-start-btn { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:999999; padding:10px 22px; border-radius:999px; border:none; cursor:pointer; font-size:16px; font-weight:600; background:#1976d2; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,.35); }
     #smax-triage-hud-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:999997; display:none; align-items:center; justify-content:center; }
-    #smax-triage-hud { background:#111827; color:#e5e7eb; border-radius:12px; padding:18px 20px 16px; max-width:900px; width:90vw; max-height:95vh; box-shadow:0 20px 45px rgba(0,0,0,.7); font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; flex-direction:column; gap:12px; }
-    #smax-triage-hud-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-    #smax-triage-hud-header h3 { margin:0; font-size:18px; }
+    #smax-triage-hud { position:relative; background:#111827; color:#e5e7eb; border-radius:12px; padding:16px 18px 14px; max-width:990px; width:99vw; max-height:95vh; box-shadow:0 20px 45px rgba(0,0,0,.7); font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; flex-direction:column; gap:10px; }
+    #smax-triage-hud-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:10px; }
+    #smax-triage-hud-header h3 { margin:0; font-size:15px; line-height:1.2; }
+    #smax-triage-hud-header .smax-triage-title-bar { display:flex; align-items:center; gap:10px; flex:1; }
+    #smax-personal-finals-label { display:flex; align-items:center; gap:6px; font-size:11px; color:#94a3b8; }
+    #smax-personal-finals-input { background:#0f172a; border:1px solid #1f2937; border-radius:999px; padding:2px 8px; color:#f8fafc; font-size:11px; min-width:120px; }
+    #smax-personal-finals-input::placeholder { color:#6b7280; }
     #smax-triage-hud-body { background:#020617; border-radius:8px; padding:12px 14px; min-height:120px; flex:1; overflow:auto; }
     #smax-triage-hud-footer { display:flex; flex-direction:column; gap:12px; }
-    .smax-triage-top-row { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:flex-start; }
-    .smax-triage-control-stack { display:flex; flex-direction:column; gap:6px; }
-    .smax-triage-main-actions { display:flex; flex-direction:column; gap:4px; align-items:flex-end; min-width:220px; }
+    .smax-triage-top-row { display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; }
+    .smax-triage-inline-controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .smax-triage-main-actions { display:flex; flex-direction:column; gap:4px; align-items:flex-end; min-width:210px; }
     .smax-triage-main-actions-buttons { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .smax-triage-urg-group { display:flex; flex-wrap:wrap; gap:6px; }
+    .smax-triage-global-group { display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:12px; color:#e5e7eb; }
+    #smax-triage-guide-btn { padding:4px 10px; border-radius:999px; border:1px solid #374151; background:transparent; color:#cbd5f5; font-size:12px; cursor:pointer; }
+    #smax-triage-guide-btn:hover { background:#1f2937; }
+    #smax-quick-guide-panel { position:absolute; top:54px; right:20px; width:260px; background:#020617; border:1px solid #1f2937; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.55); padding:12px 14px; font-size:12px; color:#e2e8f0; display:none; z-index:5; }
+    #smax-quick-guide-panel h4 { margin:0 0 6px; font-size:13px; }
+    #smax-quick-guide-panel ul { margin:0; padding-left:16px; }
+    #smax-quick-guide-panel li { margin-bottom:4px; line-height:1.35; }
     .smax-triage-primary { padding:8px 16px; border-radius:999px; border:none; cursor:pointer; background:#22c55e; color:#022c22; font-weight:600; }
     .smax-triage-secondary { padding:6px 12px; border-radius:999px; border:1px solid #4b5563; background:transparent; color:#e5e7eb; cursor:pointer; font-size:13px; }
     .smax-triage-chip { transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease; }
@@ -115,17 +129,15 @@
     #smax-triage-link-global[data-active="ready"] { background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe; }
     #smax-triage-link-global[data-active="selected"] { background:#3b82f6;color:#e5f0ff;border-color:#3b82f6; }
     #smax-triage-status { font-size:12px; color:#9ca3af; }
-    #smax-triage-ticket-details { background:#0f172a; border:1px solid #1f2937; border-radius:8px; padding:10px 12px; min-height:120px; max-height:260px; overflow:auto; }
+    #smax-triage-ticket-details { background:#0f172a; border:1px solid #1f2937; border-radius:8px; padding:10px 12px 8px; min-height:100px; max-height:240px; overflow:auto; }
     #smax-triage-ticket-details img { max-width:100%; height:auto; display:block; border-radius:6px; margin-top:6px; }
-    #smax-triage-hud-body .smax-triage-desc { max-height:160px; overflow:auto; padding:6px 8px; border-radius:6px; background:#020617; border:1px solid #1f2937; }
-    #smax-triage-quickreply-card { border:1px solid #1f2937; border-radius:8px; padding:10px 12px; background:#020617; width:100%; }
-    #smax-triage-quickreply-card textarea { width:100%; min-height:140px; resize:vertical; background:#020617; color:#e5e7eb; border:1px solid #374151; border-radius:6px; padding:8px; font-family:"Segoe UI",sans-serif; }
-    #smax-quickreply-status { font-size:11px; margin-top:6px; color:#facc15; display:none; }
-    #smax-quickreply-status[data-tone="success"] { color:#86efac; }
-    #smax-quickreply-status[data-tone="error"] { color:#fca5a5; }
-    #smax-quickreply-status[data-tone="warn"] { color:#fbbf24; }
-    #smax-quickreply-status[data-tone="info"] { color:#facc15; }
-    #smax-triage-quickreply-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; justify-content:flex-end; width:100%; }
+    #smax-triage-hud-body .smax-triage-desc { max-height:240px; overflow:auto; padding:6px 8px; border-radius:6px; background:#020617; border:1px solid #1f2937; }
+    .smax-triage-meta-row { display:flex; flex-wrap:wrap; gap:14px; font-size:13px; color:#cbd5f5; margin-bottom:4px; }
+    .smax-triage-meta-row strong { color:#f1f5f9; }
+    #smax-triage-quickreply-card { border:1px solid #1f2937; border-radius:8px; padding:10px; background:#020617; width:100%; box-sizing:border-box; transition:border-color 0.2s ease, box-shadow 0.2s ease; }
+    #smax-triage-quickreply-card[data-staged="true"] { border-color:#38bdf8; box-shadow:0 0 12px rgba(56,189,248,0.35); }
+    #smax-triage-quickreply-card textarea { width:100%; min-height:140px; resize:vertical; background:#020617; color:#e5e7eb; border:1px solid #374151; border-radius:6px; padding:8px; font-family:"Segoe UI",sans-serif; box-sizing:border-box; }
+    #smax-triage-quickreply-card .cke { width:100% !important; max-width:100%; box-sizing:border-box; }
     #smax-triage-hud .cke { z-index:1000000 !important; }
     body .cke_panel, body .cke_combopanel, body .cke_panel_block { z-index:1000003 !important; }
     body .cke_dialog, body .cke_dialog_container, body .cke_dialog_body, body .cke_dialog_background_cover { z-index:1000005 !important; }
@@ -370,8 +382,30 @@
     const triageCache = new Map();
     let triageIds = [];
     const peopleCache = new Map();
+    const manualPeopleSeed = [
+      {
+        id: '95970',
+        name: 'ROBSON SOUZA ALVES',
+        upn: 'robsonalves',
+        email: 'robsonalves@tjsp.jus.br',
+        isVip: false,
+        employeeNumber: '367442',
+        firstName: 'ROBSON',
+        lastName: 'SOUZA ALVES',
+        location: '49893064'
+      }
+    ];
+
+    const ensureManualPeople = () => {
+      manualPeopleSeed.forEach((person) => {
+        if (!person || !person.id) return;
+        if (!person.email && !person.upn) return;
+        if (!peopleCache.has(person.id)) peopleCache.set(person.id, Object.assign({}, person));
+      });
+    };
     let peopleTotal = null;
     const queueListeners = new Set();
+    ensureManualPeople();
 
     const notifyQueueListeners = () => {
       queueListeners.forEach((fn) => {
@@ -413,6 +447,29 @@
 
       const idNum = parseInt(id.replace(/\D/g, ''), 10);
       const existing = triageCache.get(id) || {};
+      let requestedForName = '';
+      const requestedRel = rel && rel.RequestedForPerson ? rel.RequestedForPerson : null;
+      const requestedProps = props && props.RequestedForPerson ? props.RequestedForPerson : null;
+      const requestedCandidates = [
+        requestedRel && requestedRel.DisplayLabel,
+        requestedRel && requestedRel.Name,
+        requestedRel && requestedRel.PrimaryDisplayValue,
+        requestedRel && requestedRel.FullName,
+        requestedProps && requestedProps.DisplayLabel,
+        requestedProps && requestedProps.Name,
+        requestedProps && requestedProps.FullName,
+        props && props.RequestedForDisplayLabel,
+        props && props.RequestedForName
+      ];
+      for (const candidate of requestedCandidates) {
+        if (!candidate) continue;
+        const trimmed = String(candidate).trim();
+        if (trimmed) {
+          requestedForName = trimmed;
+          break;
+        }
+      }
+      if (!requestedForName && existing.requestedForName) requestedForName = existing.requestedForName;
       triageCache.set(id, Object.assign({}, existing, {
         idText: id,
         idNum: Number.isNaN(idNum) ? null : idNum,
@@ -424,7 +481,8 @@
         descriptionText: fullText,
         hasInlineImage,
         solutionHtml: String(solutionHtml),
-        solutionText
+        solutionText,
+        requestedForName
       }));
     };
 
@@ -1130,14 +1188,15 @@
       if (container) return;
       toggleBtn = document.createElement('button');
       toggleBtn.id = 'smax-settings-btn';
-      toggleBtn.textContent = '⚙️ SMAX';
-      Object.assign(toggleBtn.style, { position: 'fixed', right: '12px', bottom: '12px', zIndex: 999999, padding: '8px 12px', borderRadius: '8px', background: '#222', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '14px' });
+      toggleBtn.textContent = '⚙️';
+      toggleBtn.title = 'Configurações do assistente de triagem';
+      Object.assign(toggleBtn.style, { position: 'fixed', right: '12px', bottom: '12px', zIndex: 999999, border: 'none' });
       document.body.appendChild(toggleBtn);
 
       container = document.createElement('div');
       container.id = 'smax-settings';
       Object.assign(container.style, {
-        position: 'fixed', right: '12px', bottom: '54px', maxWidth: '650px', maxHeight: '80vh', minHeight: '220px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '8px', background: '#fff', boxShadow: '0 6px 18px rgba(0,0,0,.25)', display: 'none'
+        position: 'fixed', right: '12px', bottom: '70px', maxWidth: '650px', maxHeight: '80vh', minHeight: '220px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '8px', background: '#fff', boxShadow: '0 6px 18px rgba(0,0,0,.25)', display: 'none'
       });
       document.body.appendChild(container);
 
@@ -1378,6 +1437,7 @@
    * Triage HUD
    * =======================================================*/
   const TriageHUD = (() => {
+    const quickReplyCompletionCode = 'CompletionCodeFulfilled';
     let startBtn;
     let backdrop;
     let triageQueue = [];
@@ -1389,12 +1449,12 @@
     let quickReplyEditorConfig = null;
     let globalCkSnapshot = null;
     let nativeWatcherArmed = false;
-    let quickReplyStatusTimer = null;
-    let quickReplyPendingStatus = null;
     let quickReplyFallbackNotified = false;
     let quickReplyEditorPollTimer = null;
     let activeTicketId = null;
     let editorBaselineHtml = '';
+    let quickReplyDirtyState = false;
+    let personalFinalsSet = new Set(Utils.parseDigitRanges(prefs.personalFinalsRaw || ''));
 
     const urgencyMap = {
       low: { Urgency: 'NoDisruption', ImpactScope: 'SingleUser' },
@@ -1404,45 +1464,6 @@
     };
 
     const getQuickReplyField = () => (backdrop ? backdrop.querySelector('#smax-triage-quickreply-editor') : null);
-    const getQuickReplyStatusEl = () => (backdrop ? backdrop.querySelector('#smax-quickreply-status') : null);
-
-    const applyQuickReplyStatus = ({ message, tone = 'info', persist = false }) => {
-      const el = getQuickReplyStatusEl();
-      if (!el) return false;
-      if (quickReplyStatusTimer) {
-        clearTimeout(quickReplyStatusTimer);
-        quickReplyStatusTimer = null;
-      }
-      el.textContent = message || '';
-      el.dataset.tone = tone;
-      if (!message) {
-        el.style.display = 'none';
-        return true;
-      }
-      el.style.display = 'block';
-      if (!persist) {
-        quickReplyStatusTimer = setTimeout(() => {
-          const target = getQuickReplyStatusEl();
-          if (target) target.style.display = 'none';
-          quickReplyStatusTimer = null;
-        }, 4500);
-      }
-      return true;
-    };
-
-    const setQuickReplyStatus = (message, tone = 'info', persist = false) => {
-      const payload = { message, tone, persist };
-      if (!applyQuickReplyStatus(payload)) {
-        quickReplyPendingStatus = payload;
-      } else {
-        quickReplyPendingStatus = null;
-      }
-    };
-
-    const flushQuickReplyStatus = () => {
-      if (!quickReplyPendingStatus) return;
-      if (applyQuickReplyStatus(quickReplyPendingStatus)) quickReplyPendingStatus = null;
-    };
 
     const setQuickReplyHtml = (html) => {
       quickReplyHtml = html || '';
@@ -1472,6 +1493,7 @@
       editorBaselineHtml = '';
       setQuickReplyHtml('');
       quickReplyHtml = '';
+      updateQuickReplyStageState();
     };
 
     const syncQuickReplyBaseline = (html) => {
@@ -1479,14 +1501,75 @@
       editorBaselineHtml = normalizeHtml(safe);
       setQuickReplyHtml(safe);
       quickReplyHtml = safe;
+      updateQuickReplyStageState();
     };
 
     const hasUnsavedSolution = () => normalizeHtml(readQuickReplyHtml()) !== editorBaselineHtml;
+
+    const updateQuickReplyStageState = ({ announce = false } = {}) => {
+      const staged = hasUnsavedSolution();
+      if (backdrop) {
+        const card = backdrop.querySelector('#smax-triage-quickreply-card');
+        if (card) card.dataset.staged = staged ? 'true' : 'false';
+      }
+      if (announce && staged && !quickReplyDirtyState) {
+        setStatus('Resposta pronta. Use ENVIAR para gravá-la no chamado.', 3500);
+      }
+      quickReplyDirtyState = staged;
+    };
 
     const handleQuickReplyChange = (nextHtml) => {
       quickReplyHtml = nextHtml != null ? nextHtml : readQuickReplyHtml();
       refreshButtons();
       setBaselineStatus();
+      updateQuickReplyStageState({ announce: true });
+    };
+
+    const setQuickGuideVisible = (visible) => {
+      if (!backdrop) return;
+      const panel = backdrop.querySelector('#smax-quick-guide-panel');
+      if (!panel) return;
+      panel.style.display = visible ? 'block' : 'none';
+      panel.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    };
+
+    const toggleQuickGuide = () => {
+      if (!backdrop) return;
+      const panel = backdrop.querySelector('#smax-quick-guide-panel');
+      if (!panel) return;
+      const next = panel.style.display !== 'block';
+      setQuickGuideVisible(next);
+    };
+
+    const hideQuickGuide = () => setQuickGuideVisible(false);
+
+    const refreshPersonalFinalsSet = () => {
+      personalFinalsSet = new Set(Utils.parseDigitRanges(prefs.personalFinalsRaw || ''));
+    };
+
+    const finalPairFromEntry = (entry) => {
+      if (!entry) return null;
+      if (typeof entry.idNum === 'number' && !Number.isNaN(entry.idNum)) {
+        return ((Math.abs(entry.idNum) % 100) + 100) % 100;
+      }
+      const trailing = Utils.extractTrailingDigits(entry.idText || '') || '';
+      if (!trailing) return null;
+      const slice = trailing.slice(-2);
+      if (!slice) return null;
+      const parsed = parseInt(slice, 10);
+      if (Number.isNaN(parsed)) return null;
+      return ((Math.abs(parsed) % 100) + 100) % 100;
+    };
+
+    const matchesPersonalFinals = (entry) => {
+      if (!personalFinalsSet.size) return true;
+      const target = finalPairFromEntry(entry);
+      return target != null && personalFinalsSet.has(target);
+    };
+
+    const applyPersonalFinalsFilter = (queue) => {
+      if (!personalFinalsSet.size || !Array.isArray(queue)) return queue;
+      return queue.filter((entry) => matchesPersonalFinals(entry));
     };
 
     const deepClone = (value) => {
@@ -1614,7 +1697,7 @@
       quickReplyEditorConfig = captureGlobalConfigSnapshot();
       if (quickReplyEditorConfig && !quickReplyFallbackNotified) {
         quickReplyFallbackNotified = true;
-        setQuickReplyStatus('CKEditor nativo ainda não foi aberto; usando configuração global detectada.', 'warn', true);
+        console.warn('[SMAX] CKEditor nativo ainda não foi aberto; usando configuração global detectada.');
       }
       return quickReplyEditorConfig;
     };
@@ -1622,7 +1705,7 @@
     const hookNativeEditors = () => {
       if (nativeWatcherArmed) return;
       nativeWatcherArmed = true;
-      setQuickReplyStatus('Aguardando o CKEditor nativo para copiar a configuração...', 'info', true);
+      console.info('[SMAX] Aguardando o CKEditor nativo para copiar a configuração...');
       const attempt = () => {
         const ck = getPageCKEditor();
         if (!(ck && ck.on)) {
@@ -1635,7 +1718,7 @@
           if (cfg) {
             quickReplyEditorConfig = cfg;
             quickReplyFallbackNotified = false;
-            setQuickReplyStatus('Configuração do CKEditor clonada. Inicializando editor rápido...', 'info');
+            console.info('[SMAX] Configuração do CKEditor clonada para a resposta rápida.');
             if (!quickReplyEditor) ensureQuickReplyEditor();
           }
         };
@@ -1654,7 +1737,7 @@
       ensureSourceButton(fallback.toolbar);
       if (!quickReplyFallbackNotified) {
         quickReplyFallbackNotified = true;
-        setQuickReplyStatus('CKEditor nativo não detectado; usando configuração padrão.', 'warn', true);
+        console.warn('[SMAX] CKEditor nativo não detectado; usando configuração padrão na resposta rápida.');
       }
       return fallback;
     };
@@ -1667,7 +1750,7 @@
       const config = buildQuickReplyConfig();
       if (!config) return;
       try {
-        setQuickReplyStatus('Inicializando editor rico...', 'info', true);
+        console.info('[SMAX] Inicializando editor de resposta rápida.');
         const instanceConfig = Object.assign({ resize_enabled: true }, config);
         appendEditorCss(instanceConfig, 'body{color:#000000 !important;}');
         quickReplyEditor = ck.replace(field, instanceConfig);
@@ -1686,7 +1769,7 @@
         quickReplyEditor.on('instanceReady', () => {
           enforceDefaultColor();
           quickReplyEditor.setData(quickReplyHtml);
-          setQuickReplyStatus('Editor rico pronto. Texto sincronizado automaticamente.', 'success');
+          console.info('[SMAX] Editor de resposta rápida pronto e sincronizado.');
         });
         quickReplyEditor.on('contentDom', enforceDefaultColor);
         quickReplyEditor.on('change', () => {
@@ -1694,7 +1777,7 @@
         });
       } catch (err) {
         console.warn('[SMAX] Failed to init quick reply editor:', err);
-        setQuickReplyStatus('Não consegui carregar o CKEditor aqui. Campo permanece simples.', 'error', true);
+        console.error('[SMAX] Não consegui carregar o CKEditor no painel de resposta rápida.');
       }
     };
 
@@ -1708,7 +1791,7 @@
         ensureQuickReplyEditor();
       } else {
         if (quickReplyEditorAttempts === 1) {
-          setQuickReplyStatus('Carregando scripts do CKEditor. A resposta rápida vira editor rico em instantes...', 'info', true);
+          console.info('[SMAX] Carregando scripts do CKEditor para a resposta rápida...');
         }
       }
       if (!quickReplyEditor) {
@@ -1717,19 +1800,6 @@
       } else {
         quickReplyEditorPollTimer = null;
       }
-    };
-
-    const respondQuickReply = () => {
-      const html = readQuickReplyHtml().trim();
-      if (!activeTicketId) {
-        setQuickReplyStatus('Nenhum chamado selecionado para responder.', 'error');
-        return;
-      }
-      if (!html) {
-        setQuickReplyStatus('Digite a resposta antes de responder.', 'warn');
-        return;
-      }
-      setQuickReplyStatus('Resposta pronta. Clique em Salvar para gravá-la no chamado.', 'success');
     };
 
     const captureSelectedIdFromDom = () => {
@@ -1751,7 +1821,9 @@
     const buildQueue = () => {
       const snapshot = DataRepository.getTriageQueueSnapshot();
       const selectedFromDom = captureSelectedIdFromDom();
-      if (snapshot.length) return { list: snapshot.slice(), selectedId: selectedFromDom };
+      if (snapshot.length) {
+        return { list: applyPersonalFinalsFilter(snapshot.slice()), selectedId: selectedFromDom };
+      }
       const viewport = Utils.getGridViewport();
       if (!viewport) return [];
       let idColIndex = 0;
@@ -1796,13 +1868,29 @@
         if (a.idNum != null && b.idNum != null && a.idNum !== b.idNum) return a.idNum - b.idNum;
         return 0;
       });
-      return { list: queue, selectedId: selectedId || selectedFromDom || null };
+      return { list: applyPersonalFinalsFilter(queue), selectedId: selectedId || selectedFromDom || null };
     };
 
     const currentItem = () => {
       if (!triageQueue.length) return null;
       if (triageIndex < 0 || triageIndex >= triageQueue.length) return triageQueue[0];
       return triageQueue[triageIndex];
+    };
+
+    const rebuildQueueForPersonalFinals = () => {
+      if (!backdrop || backdrop.style.display !== 'flex') return;
+      const currentId = currentItem()?.idText || null;
+      const { list } = buildQueue();
+      triageQueue = list;
+      if (!triageQueue.length) {
+        triageIndex = -1;
+      } else if (currentId) {
+        const idx = triageQueue.findIndex((entry) => entry.idText === currentId);
+        triageIndex = idx >= 0 ? idx : 0;
+      } else {
+        triageIndex = 0;
+      }
+      render();
     };
 
     const resetStaged = () => {
@@ -1820,6 +1908,22 @@
       return Distribution.ownerForDigits(item.idText) || Distribution.ownerForDigits(item.idNum != null ? String(item.idNum) : '');
     };
 
+    const formatBrazilianDateTime = (ts, fallbackText) => {
+      const options = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+      if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+        try {
+          return new Date(ts).toLocaleString('pt-BR', options);
+        } catch {}
+      }
+      const parsed = Utils.parseSmaxDateTime(fallbackText || '');
+      if (parsed) {
+        try {
+          return new Date(parsed).toLocaleString('pt-BR', options);
+        } catch {}
+      }
+      return fallbackText || 'Faltando na visão';
+    };
+
     const render = () => {
       if (!backdrop) return;
       const bodyEl = backdrop.querySelector('#smax-triage-hud-body');
@@ -1828,7 +1932,6 @@
       const prevBtn = backdrop.querySelector('#smax-triage-prev');
       const nextBtn = backdrop.querySelector('#smax-triage-next');
       const commitBtn = backdrop.querySelector('#smax-triage-commit');
-      const commitFocusBtn = backdrop.querySelector('#smax-triage-commit-and-focus');
       const inputGlobal = backdrop.querySelector('#smax-triage-global-id');
       const btnLinkGlobal = backdrop.querySelector('#smax-triage-link-global');
       const urgencyButtons = {
@@ -1838,12 +1941,13 @@
         crit: backdrop.querySelector('#smax-triage-urg-crit')
       };
       const assignBtn = backdrop.querySelector('#smax-triage-assign-owner');
-      const respondBtn = backdrop.querySelector('#smax-quickreply-respond');
 
       if (!triageQueue.length) {
         triageIndex = -1;
-        if (ticketDetailsEl) ticketDetailsEl.innerHTML = '<div style="font-size:14px;color:#e5e7eb;">Nenhum chamado encontrado na lista atual.</div>';
-        statusEl.textContent = 'Verifique se a visão contém ID, Descrição e Hora de Criação.';
+        if (ticketDetailsEl) ticketDetailsEl.innerHTML = '<div style="font-size:14px;color:#e5e7eb;">Nenhum chamado encontrado na lista atual. Verifique o campo "meus finais", logo acima.</div>';
+        statusEl.textContent = personalFinalsSet.size
+          ? 'Nenhum chamado corresponde aos finais configurados.'
+          : 'Verifique se a visão contém ID, Descrição e Hora de Criação.';
         if (nextBtn) nextBtn.disabled = true;
         if (prevBtn) prevBtn.disabled = true;
         Object.values(urgencyButtons).forEach((btn) => { btn.disabled = true; btn.dataset.active = 'false'; });
@@ -1852,10 +1956,8 @@
         btnLinkGlobal.disabled = true;
         btnLinkGlobal.dataset.active = 'false';
         commitBtn.disabled = true;
-        commitFocusBtn.disabled = true;
         activeTicketId = null;
         clearQuickReplyState();
-        if (respondBtn) respondBtn.disabled = true;
         return;
       }
 
@@ -1867,7 +1969,7 @@
       resetStaged();
       if (inputGlobal) inputGlobal.value = '';
       clearQuickReplyState();
-      setQuickReplyStatus('Carregando solução do chamado selecionado...', 'info', true);
+      setStatus('Carregando solução do chamado selecionado...', 3000);
 
       if (ticketDetailsEl) {
         ticketDetailsEl.innerHTML = `
@@ -1887,7 +1989,7 @@
               </div>
             `;
           }
-          setQuickReplyStatus('Não consegui carregar a solução deste chamado.', 'error', true);
+          setStatus('Não consegui carregar a solução deste chamado.', 4000);
           return;
         }
         const missing = [];
@@ -1900,22 +2002,32 @@
              </div>`
           : '';
         const vipBadge = full.isVip ? '<span style="margin-left:8px;padding:2px 6px;border-radius:999px;background:#facc15;color:#854d0e;font-size:11px;font-weight:700;">VIP</span>' : '';
+        const requestedForHtml = full.requestedForName
+          ? `<div><strong>Solicitado para</strong> ${full.requestedForName}</div>`
+          : '';
         if (!ticketDetailsEl) return;
+        const createdDisplay = formatBrazilianDateTime(full.createdTs, full.createdText);
         const descHtml = Utils.sanitizeRichText(full.descriptionHtml || full.descriptionText || full.subjectText || '');
         const descDisplay = descHtml || `<div style="color:#94a3b8;">(Sem descrição disponível. Confira a coluna Descrição.)</div>`;
+        const idLink = full.idText
+          ? `<a href="https://suporte.tjsp.jus.br/saw/Request/${encodeURIComponent(full.idText)}/general" target="_blank" rel="noreferrer noopener" style="color:#38bdf8;text-decoration:none;">${full.idText}</a>`
+          : '-';
         ticketDetailsEl.innerHTML = `
           <div style="display:flex;flex-direction:column;gap:6px;font-size:14px;">
             ${warning}
-            <div><strong>ID:</strong> ${full.idText || '-'} ${vipBadge}</div>
-            <div><strong>Hora de criação:</strong> ${full.createdText || 'Faltando na visão'}</div>
-            <div style="margin-top:4px;"><strong>Descrição completa:</strong></div>
+            <div class="smax-triage-meta-row">
+              <div><strong>ID</strong> ${idLink}${vipBadge ? ` ${vipBadge}` : ''}</div>
+              <div><strong>Hora de criação</strong> ${createdDisplay}</div>
+              ${requestedForHtml}
+            </div>
             <div class="smax-triage-desc">${descDisplay}</div>
           </div>
         `;
 
         const solutionHtml = full.solutionHtml != null ? full.solutionHtml : '';
         syncQuickReplyBaseline(solutionHtml);
-        setQuickReplyStatus(solutionHtml ? 'Solução atual carregada deste chamado.' : 'Chamado ainda não possui solução registrada.', solutionHtml ? 'success' : 'info');
+        if (solutionHtml) setStatus('Solução atual carregada deste chamado.', 2500);
+        else setBaselineStatus();
       });
 
       Object.entries(urgencyButtons).forEach(([key, btn]) => {
@@ -1986,13 +2098,8 @@
       }
 
       const commitBtn = backdrop.querySelector('#smax-triage-commit');
-      const commitFocusBtn = backdrop.querySelector('#smax-triage-commit-and-focus');
       const canCommit = !!anyStaged();
       commitBtn.disabled = !canCommit;
-      commitFocusBtn.disabled = !canCommit;
-
-      const respondBtn = backdrop.querySelector('#smax-quickreply-respond');
-      if (respondBtn) respondBtn.disabled = !readQuickReplyHtml().trim();
     };
 
     const setBaselineStatus = () => {
@@ -2007,9 +2114,9 @@
       const stagedBits = [];
       if (stagedState.urgency) stagedBits.push('urgência');
       if (stagedState.assign) stagedBits.push('atribuir');
-      if (stagedState.parentSelected && stagedState.parentId) stagedBits.push('pai');
-      if (hasUnsavedSolution()) stagedBits.push('resposta não salva');
-      const pending = stagedBits.length ? ` Pendências: ${stagedBits.join(', ')}.` : '';
+      if (stagedState.parentSelected && stagedState.parentId) stagedBits.push('global');
+      if (hasUnsavedSolution()) stagedBits.push('resposta');
+      const pending = stagedBits.length ? ` Pronto para enviar: ${stagedBits.join(', ')}.` : '';
       statusEl.textContent = `Chamado ${position} de ${total} na visão atual.${pending}`;
     };
 
@@ -2033,13 +2140,16 @@
       setBaselineStatus();
     };
 
-    const commit = (focusSolution) => {
+    const commit = () => {
       const item = currentItem();
       if (!item) return;
       const props = { Id: String(item.idText) };
       if (stagedState.urgency) Object.assign(props, urgencyMap[stagedState.urgency]);
       const solutionHtml = hasUnsavedSolution() ? readQuickReplyHtml() : '';
-      if (solutionHtml) props.Solution = solutionHtml;
+      if (solutionHtml) {
+        props.Solution = solutionHtml;
+        props.CompletionCode = quickReplyCompletionCode;
+      }
 
       let ownerName = null;
       if (stagedState.assign) ownerName = ownerForCurrent();
@@ -2062,7 +2172,7 @@
 
       if (!prefs.enableRealWrites) {
         setStatus('Modo simulação ativo. Mudanças não foram gravadas.', 2500);
-        advanceQueue(focusSolution);
+        advanceQueue();
         return;
       }
 
@@ -2084,7 +2194,7 @@
           if (DataRepository.updateCachedSolution) DataRepository.updateCachedSolution(props.Id, props.Solution);
         }
         setStatus(hadError ? 'Algumas alterações falharam.' : 'Alterações gravadas com sucesso.', hadError ? 3000 : 2000);
-        advanceQueue(focusSolution);
+        advanceQueue();
       }).catch(() => {
         setStatus('Erro ao gravar alterações.', 3000);
       });
@@ -2099,22 +2209,18 @@
       statusTimer = setTimeout(() => setBaselineStatus(), duration);
     };
 
-    const navigateQueue = (delta, focusSolution) => {
+    const navigateQueue = (delta) => {
       if (hasUnsavedSolution()) {
         const discard = window.confirm('A resposta atual não foi salva. Deseja descartá-la antes de continuar?');
         if (!discard) {
-          setQuickReplyStatus('Navegação cancelada para preservar a resposta não salva.', 'warn');
+          setStatus('Navegação cancelada para preservar a resposta não salva.', 3500);
           return;
         }
         clearQuickReplyState();
-        setQuickReplyStatus('Resposta descartada. Carregando outro chamado...', 'info');
+        setStatus('Resposta descartada. Carregando outro chamado...', 3000);
       }
       if (!triageQueue.length) {
         render();
-        if (focusSolution) {
-          Utils.focusSolutionEditor();
-          closeHud();
-        }
         return;
       }
 
@@ -2141,17 +2247,17 @@
       }
 
       render();
-      if (focusSolution) {
-        Utils.focusSolutionEditor();
-        closeHud();
-      }
     };
 
-    const advanceQueue = (focusSolution) => navigateQueue(1, focusSolution);
-    const retreatQueue = () => navigateQueue(-1, false);
+    const advanceQueue = () => navigateQueue(1);
+    const retreatQueue = () => navigateQueue(-1);
 
     const openHud = () => {
+      DataRepository.ensurePeopleLoaded();
+      if (startBtn) startBtn.style.display = 'none';
       backdrop.style.display = 'flex';
+      const finalsInput = backdrop.querySelector('#smax-personal-finals-input');
+      if (finalsInput) finalsInput.value = prefs.personalFinalsRaw || '';
       const { list, selectedId } = buildQueue();
       triageQueue = list;
       if (!triageQueue.length) triageIndex = -1;
@@ -2168,6 +2274,8 @@
 
     const closeHud = () => {
       backdrop.style.display = 'none';
+      if (startBtn) startBtn.style.display = 'block';
+      hideQuickGuide();
     };
 
     const init = () => {
@@ -2183,8 +2291,33 @@
       backdrop.innerHTML = `
         <div id="smax-triage-hud">
           <div id="smax-triage-hud-header">
-            <h3>Triagem de Chamados</h3>
-            <button type="button" class="smax-triage-secondary" id="smax-triage-close" title="Minimizar triagem">_</button>
+            <div class="smax-triage-title-bar">
+              <h3>Triagem de Chamados</h3>
+              <label id="smax-personal-finals-label" title="Limite os chamados pelos seus dígitos finais">
+                <span>Meus finais</span>
+                <input type="text" id="smax-personal-finals-input" placeholder="0-32,66-99" inputmode="numeric" autocomplete="off" />
+              </label>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <button type="button" id="smax-triage-guide-btn" title="Dicas rápidas">Guia Rápido</button>
+              <button type="button" class="smax-triage-secondary" id="smax-triage-close" title="Minimizar triagem">_</button>
+            </div>
+          </div>
+          <div id="smax-quick-guide-panel" aria-hidden="true">
+            <h4>Guia rápido</h4>
+            <ul>
+              <li>Use os botões de urgência para definir impacto antes de atribuir.</li>
+              <li>“Meus finais” limita a fila de triagem aos IDs desejados.</li>
+              <li>Editar a resposta rápida já a deixa pronta; "ENVIAR" grava tudo no SMAX.</li>
+              <li>Filtre os chamados através do SMAX corretamente antes de começar a Triagem</li>
+              <li>Configure corretamente os finais e colegas ausentes através do ícone de configuração, no canto direito inferior do SMAX</li>
+              <li>O filtro (não a coluna) "Hora de Criação" do SMAX permite escolher um intervalo de datas.</li>
+              <li>Os chamados são ordenados sempre por VIP, e mais antigos primeiro.</li>
+              <li>CUIDADO DOBRADO: Vincular Global NÃO VERIFICA se o número é válido.</li>
+            </ul>
+            <div style="margin-top:8px;display:flex;justify-content:flex-end;">
+              <button type="button" class="smax-triage-secondary" id="smax-guide-close" style="padding:4px 10px;">Fechar</button>
+            </div>
           </div>
           <div id="smax-triage-hud-body">
             <div id="smax-triage-ticket-details">
@@ -2193,18 +2326,16 @@
           </div>
           <div id="smax-triage-hud-footer">
             <div class="smax-triage-top-row">
-              <div class="smax-triage-control-stack">
-                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              <div class="smax-triage-inline-controls">
+                <div class="smax-triage-urg-group">
                   <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-low" id="smax-triage-urg-low" disabled>Baixa</button>
                   <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-med" id="smax-triage-urg-med" disabled>Média</button>
                   <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-high" id="smax-triage-urg-high" disabled>Alta</button>
                   <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
                 </div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                  <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-assign-owner" disabled>Sem dono</button>
-                </div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;font-size:12px;color:#e5e7eb;">
-                  <input type="text" id="smax-triage-global-id" placeholder="ID do global"
+                <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-assign-owner" disabled>Sem dono</button>
+                <div class="smax-triage-global-group">
+                  <input type="text" id="smax-triage-global-id" placeholder="ID do global (cuidado)"
                         style="width:130px;padding:4px 6px;border-radius:999px;border:1px solid #4b5563;background:#020617;color:#e5e7eb;font-size:12px;" />
                   <button type="button" class="smax-triage-secondary smax-triage-chip" id="smax-triage-link-global" disabled>Vincular</button>
                 </div>
@@ -2214,43 +2345,58 @@
                 <div class="smax-triage-main-actions-buttons">
                   <button type="button" class="smax-triage-secondary" id="smax-triage-prev" disabled>Chamado anterior</button>
                   <button type="button" class="smax-triage-secondary" id="smax-triage-next" disabled>Próximo chamado</button>
-                  <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>Salvar</button>
-                  <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit-and-focus" disabled>Salvar e Editar →</button>
+                  <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>ENVIAR</button>
                 </div>
               </div>
             </div>
-            <div id="smax-triage-quickreply-card">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <strong>Resposta rápida</strong>
-                <span style="font-size:11px;color:#9ca3af;">Use para preparar um retorno antes de enviar.</span>
-              </div>
+            <div id="smax-triage-quickreply-card" data-staged="false">
               <textarea id="smax-triage-quickreply-editor" placeholder="Digite aqui sua resposta..."></textarea>
-              <div id="smax-quickreply-status" style="display:none;font-size:11px;margin-top:6px;color:#facc15;"></div>
-              <div id="smax-triage-quickreply-actions">
-                <button type="button" class="smax-triage-primary" id="smax-quickreply-respond">Responder</button>
-              </div>
             </div>
             <div id="smax-triage-status">Fila de triagem ainda não inicializada.</div>
           </div>
         </div>
       `;
       document.body.appendChild(backdrop);
-      flushQuickReplyStatus();
 
       startBtn.addEventListener('click', openHud);
       backdrop.querySelector('#smax-triage-close').addEventListener('click', closeHud);
-      backdrop.addEventListener('click', (event) => { if (event.target === backdrop) closeHud(); });
+      backdrop.addEventListener('click', (event) => {
+        const panel = backdrop.querySelector('#smax-quick-guide-panel');
+        if (panel && panel.style.display === 'block') {
+          if (!panel.contains(event.target) && event.target.id !== 'smax-triage-guide-btn') hideQuickGuide();
+        }
+        if (event.target === backdrop) closeHud();
+      });
       const prevBtn = backdrop.querySelector('#smax-triage-prev');
       if (prevBtn) prevBtn.addEventListener('click', () => retreatQueue());
-      backdrop.querySelector('#smax-triage-next').addEventListener('click', () => advanceQueue(false));
-      backdrop.querySelector('#smax-triage-commit').addEventListener('click', () => commit(false));
-      backdrop.querySelector('#smax-triage-commit-and-focus').addEventListener('click', () => commit(true));
+      backdrop.querySelector('#smax-triage-next').addEventListener('click', () => advanceQueue());
+      backdrop.querySelector('#smax-triage-commit').addEventListener('click', () => commit());
       const quickTextarea = backdrop.querySelector('#smax-triage-quickreply-editor');
       if (quickTextarea) quickTextarea.addEventListener('input', () => {
         if (!quickReplyEditor) handleQuickReplyChange(quickTextarea.value);
       });
-      const respondBtn = backdrop.querySelector('#smax-quickreply-respond');
-      if (respondBtn) respondBtn.addEventListener('click', respondQuickReply);
+      const finalsInput = backdrop.querySelector('#smax-personal-finals-input');
+      if (finalsInput) {
+        finalsInput.value = prefs.personalFinalsRaw || '';
+        finalsInput.addEventListener('input', () => {
+          const cleaned = finalsInput.value.replace(/[^0-9,\-\s]/g, '');
+          if (cleaned !== finalsInput.value) finalsInput.value = cleaned;
+          prefs.personalFinalsRaw = cleaned.trim();
+          refreshPersonalFinalsSet();
+          savePrefs();
+          rebuildQueueForPersonalFinals();
+        });
+      }
+      const guideBtn = backdrop.querySelector('#smax-triage-guide-btn');
+      if (guideBtn) guideBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        toggleQuickGuide();
+      });
+      const guideClose = backdrop.querySelector('#smax-guide-close');
+      if (guideClose) guideClose.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        hideQuickGuide();
+      });
       scheduleQuickReplyEditor();
     };
 
