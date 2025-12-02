@@ -1,0 +1,3478 @@
+// ==UserScript==
+// @name         TRIAGEM - SMAX SGS221
+// @namespace    https://github.com/DanielMacCruz/SGS221-Triagem
+// @version      0.6
+// @description  Interface enhancements for triagem workflow
+// @author       YOU
+// @match        https://suporte.tjsp.jus.br/saw/Requests*
+// @run-at       document-start
+// @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        unsafeWindow
+// @downloadURL  https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/main/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
+// @updateURL    https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/main/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
+// @homepageURL  https://github.com/DanielMacCruz/SGS221-Triagem
+// @supportURL   https://chatgpt.com
+// ==/UserScript==
+
+(() => {
+  'use strict';
+
+  if (window.top && window.top !== window.self) return;
+
+  const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+  const getPageCKEditor = () => (pageWindow && pageWindow.CKEDITOR ? pageWindow.CKEDITOR : null);
+
+  /* =========================================================
+   * Preferences
+   * =======================================================*/
+  const PrefStore = (() => {
+    const defaults = {
+      nameBadgesOn: true,
+      collapseOn: false,
+      enlargeCommentsOn: true,
+      flagSkullOn: true,
+      nameGroups: {},
+      ausentes: [],
+      nameColors: {},
+      enableRealWrites: false,
+      defaultGlobalChangeId: '',
+      personalFinalsRaw: '',
+      myPersonId: '',
+      myPersonName: ''
+    };
+
+    const state = JSON.parse(JSON.stringify(defaults));
+
+    const load = () => {
+      try {
+        const saved = GM_getValue('smax_prefs');
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        Object.assign(state, defaults, parsed || {});
+        console.log('[SMAX] Preferences loaded:', state);
+      } catch (err) {
+        console.warn('[SMAX] Failed to load preferences:', err);
+      }
+    };
+
+    const save = () => {
+      try {
+        GM_setValue('smax_prefs', JSON.stringify(state));
+        console.log('[SMAX] Preferences saved:', state);
+      } catch (err) {
+        console.error('[SMAX] Failed to save preferences:', err);
+      }
+    };
+
+    load();
+    return { state, save, defaults };
+  })();
+
+  const prefs = PrefStore.state;
+  const savePrefs = PrefStore.save;
+
+  /* =========================================================
+   * Styles
+   * =======================================================*/
+  GM_addStyle(`
+    .slick-cell.tmx-namecell { font-weight:700 !important; transition: box-shadow .15s ease; }
+    .slick-cell.tmx-namecell a { color: inherit !important; }
+    .slick-cell.tmx-namecell:focus-within { outline: 2px solid rgba(0,0,0,.25); outline-offset: 2px; }
+    .slick-cell.tmx-namecell:hover { box-shadow: 0 0 0 2px rgba(0,0,0,.08) inset; }
+
+    .comment-items { height: auto !important; max-height: none !important; }
+
+    .smax-absent-wrapper { display:inline-flex; align-items:center; gap:4px; cursor:pointer; font-size:12px; white-space:nowrap; }
+    .smax-absent-box { width:14px; height:14px; border:1px solid #555; border-radius:2px; background:#fff; box-sizing:border-box; }
+    .smax-absent-input:checked + .smax-absent-box { background:#d32f2f; border-color:#d32f2f; box-shadow:0 0 0 1px #d32f2f; }
+
+    #smax-settings-btn { width:50px; height:50px; border-radius:50%; border:none; background:#0f172a; color:#f8fafc; font-size:26px; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px rgba(0,0,0,.35); cursor:pointer; }
+    #smax-settings-btn:hover { background:#1f2937; }
+    #smax-refresh-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 999998; display: none; align-items: center; justify-content: center; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    #smax-refresh-overlay-inner { width:70px; height:70px; border-radius:50%; background:#34c759; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px rgba(255,255,255,.35), 0 0 16px rgba(52,199,89,.8); }
+    #smax-refresh-now { width:46px; height:46px; border-radius:50%; border:none; background:transparent; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:26px; }
+
+    #smax-triage-start-btn { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:999999; padding:10px 22px; border-radius:999px; border:none; cursor:pointer; font-size:16px; font-weight:600; background:#1976d2; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,.35); }
+    #smax-triage-hud-backdrop { position:fixed; inset:0; padding:30px 0 20px; background:rgba(0,0,0,0.5); z-index:999997; display:none; align-items:flex-start; justify-content:center; overflow:auto; }
+    #smax-triage-hud { position:relative; background:#111827; color:#e5e7eb; border-radius:12px; padding:16px 18px 14px; max-width:1310px; width:99vw; max-height:calc(100vh - 60px); box-shadow:0 20px 45px rgba(0,0,0,.7); font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; gap:14px; align-items:stretch; }
+    .smax-triage-header-nav { display:inline-flex; align-items:center; gap:6px; margin-right:6px; }
+    .smax-triage-header-nav button { width:36px; height:28px; border-radius:999px; border:1px solid #38bdf8; background:transparent; color:#38bdf8; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.15s ease, color 0.15s ease; }
+    .smax-triage-header-nav button:hover:not(:disabled) { background:#38bdf8; color:#0f172a; }
+    .smax-triage-header-nav button:disabled { opacity:0.4; cursor:not-allowed; }
+    #smax-triage-hud-main { display:flex; flex-direction:column; gap:10px; flex:1; min-width:0; }
+    #smax-triage-hud-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:10px; }
+    #smax-triage-hud-header h3 { margin:0; font-size:15px; line-height:1.2; }
+    #smax-triage-hud-header .smax-triage-title-bar { display:flex; align-items:center; gap:10px; flex:1; }
+    #smax-personal-finals-label { display:flex; align-items:center; gap:6px; font-size:11px; color:#94a3b8; }
+    #smax-personal-finals-input { background:#0f172a; border:1px solid #1f2937; border-radius:999px; padding:2px 8px; color:#f8fafc; font-size:11px; min-width:120px; }
+    #smax-personal-finals-input::placeholder { color:#6b7280; }
+    #smax-triage-hud-body { background:#020617; border-radius:8px; padding:12px 14px; flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+    #smax-triage-hud-footer { display:flex; flex-direction:column; gap:12px; }
+    .smax-triage-top-row { display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; }
+    .smax-triage-inline-controls { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+    .smax-triage-main-actions { display:flex; flex-direction:column; gap:4px; align-items:flex-end; min-width:210px; }
+    .smax-triage-main-actions-buttons { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .smax-triage-urg-group { display:flex; flex-wrap:wrap; gap:6px; }
+    .smax-triage-auto-panels { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; min-width:260px; justify-content:flex-end; margin-left:auto; }
+    .smax-triage-indicator { display:flex; flex-direction:column; gap:2px; padding:6px 10px; border-radius:10px; border:1px solid #374151; background:#020617; min-width:140px; font-size:12px; color:#f1f5f9; transition:border-color .15s ease, box-shadow .15s ease, opacity .15s ease; flex:0 0 auto; width:auto; }
+    .smax-triage-indicator .smax-indicator-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; }
+    .smax-triage-indicator[data-state="pending"] { border-color:#facc15; box-shadow:0 0 12px rgba(250,204,21,0.25); }
+    .smax-triage-indicator[data-state="staged"] { border-color:#22c55e; box-shadow:0 0 16px rgba(34,197,94,0.35); }
+    .smax-triage-indicator[data-state="disabled"] { opacity:0.6; border-style:dashed; box-shadow:none; }
+    .smax-triage-global-group { display:flex; flex-direction:column; gap:4px; font-size:12px; color:#e5e7eb; flex:0 0 auto; min-width:170px; }
+    .smax-global-input { width:140px; padding:4px 8px; border-radius:999px; border:1px solid #4b5563; background:#020617; color:#e5e7eb; font-size:12px; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+    .smax-global-input::placeholder { color:#6b7280; opacity:1; }
+    .smax-global-input:focus { outline:none; border-color:#38bdf8; box-shadow:0 0 8px rgba(56,189,248,0.35); }
+    .smax-global-input[data-state="staged"] { border-color:#22c55e; background:#052e16; color:#bbf7d0; box-shadow:0 0 12px rgba(34,197,94,0.35); }
+    .smax-global-input[data-state="pending"] { border-color:#facc15; background:#422006; color:#fde68a; box-shadow:0 0 12px rgba(250,204,21,0.25); }
+    .smax-global-hint { font-size:11px; color:#94a3b8; min-height:14px; }
+    .smax-global-hint[data-state="staged"] { color:#4ade80; }
+    #smax-triage-guide-btn { padding:4px 10px; border-radius:999px; border:1px solid #374151; background:transparent; color:#cbd5f5; font-size:12px; cursor:pointer; }
+    #smax-triage-guide-btn:hover { background:#1f2937; }
+    #smax-quick-guide-panel { position:absolute; top:54px; right:20px; width:260px; background:#020617; border:1px solid #1f2937; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.55); padding:12px 14px; font-size:12px; color:#e2e8f0; display:none; z-index:5; }
+    #smax-quick-guide-panel h4 { margin:0 0 6px; font-size:13px; }
+    #smax-quick-guide-panel ul { margin:0; padding-left:16px; }
+    #smax-quick-guide-panel li { margin-bottom:4px; line-height:1.35; }
+    .smax-triage-primary { padding:8px 16px; border-radius:999px; border:none; cursor:pointer; background:#22c55e; color:#022c22; font-weight:600; }
+    .smax-triage-secondary { padding:6px 12px; border-radius:999px; border:1px solid #4b5563; background:transparent; color:#e5e7eb; cursor:pointer; font-size:13px; }
+    .smax-triage-chip { transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease; }
+    .smax-triage-chip[data-active="true"], .smax-triage-chip[data-active="selected"] { box-shadow:0 0 0 1px rgba(250,250,250,0.7), 0 0 18px rgba(250,250,250,0.55); transform:translateY(-1px) scale(1.01); }
+    .smax-urg-low[data-active="true"]  { background:#facc15;color:#111827;border-color:#facc15; }
+    .smax-urg-med[data-active="true"]  { background:#fb923c;color:#111827;border-color:#fb923c; }
+    .smax-urg-high[data-active="true"] { background:#f97316;color:#111827;border-color:#f97316; }
+    .smax-urg-crit[data-active="true"] { background:#ef4444;color:#fee2e2;border-color:#ef4444; }
+    #smax-triage-status { font-size:12px; color:#9ca3af; }
+    #smax-triage-discussions { width:320px; background:#050c1d; border:1px solid #1f2937; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:10px; overflow:auto; flex-shrink:0; min-height:0; max-height:100%; }
+    .smax-discussions-placeholder { font-size:13px; color:#94a3b8; line-height:1.4; }
+    .smax-discussion-card { border:1px solid #1f2937; border-radius:8px; padding:8px 10px; background:#0f172a; display:flex; flex-direction:column; gap:6px; }
+    .smax-discussion-heading { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:12px; }
+    .smax-discussion-title { font-weight:600; color:#f8fafc; }
+    .smax-discussion-privacy { font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:1px 8px; border-radius:999px; border:1px solid rgba(248,250,252,0.3); color:#e2e8f0; }
+    .smax-discussion-card[data-privacy="PUBLIC"] .smax-discussion-privacy { background:#082f49; border-color:#38bdf8; color:#bae6fd; }
+    .smax-discussion-card[data-privacy="INTERNAL"] .smax-discussion-privacy { background:#1e1b4b; border-color:#a78bfa; color:#ede9fe; }
+    .smax-discussion-card[data-privacy="EXTERNAL"] .smax-discussion-privacy { background:#0f172a; border-color:#4ade80; color:#bbf7d0; }
+    .smax-discussion-body { font-size:13px; color:#e2e8f0; line-height:1.45; max-height:150px; overflow:auto; }
+    .smax-discussion-body p { margin:0 0 6px; }
+    .smax-discussion-body p:last-child { margin-bottom:0; }
+    .smax-discussion-meta { font-size:11px; color:#94a3b8; }
+    #smax-triage-ticket-details { flex:1; background:#0f172a; border:1px solid #1f2937; border-radius:8px; padding:10px 12px 8px; min-height:0; overflow:auto; }
+    #smax-triage-ticket-details img { max-width:100%; height:auto; display:block; border-radius:6px; margin-top:6px; }
+    #smax-triage-hud-body .smax-triage-desc { max-height:240px; overflow:auto; padding:6px 8px; border-radius:6px; background:#020617; border:1px solid #1f2937; }
+    .smax-triage-meta-row { display:flex; flex-wrap:wrap; gap:14px; font-size:13px; color:#cbd5f5; margin-bottom:4px; }
+    .smax-triage-meta-row strong { color:#f1f5f9; }
+    #smax-triage-quickreply-card { border:1px solid #1f2937; border-radius:8px; padding:10px; background:#020617; width:100%; box-sizing:border-box; transition:border-color 0.2s ease, box-shadow 0.2s ease; }
+    #smax-triage-quickreply-card[data-staged="true"] { border-color:#38bdf8; box-shadow:0 0 12px rgba(56,189,248,0.35); }
+    #smax-triage-quickreply-card textarea { width:100%; min-height:140px; resize:vertical; background:#020617; color:#e5e7eb; border:1px solid #374151; border-radius:6px; padding:8px; font-family:"Segoe UI",sans-serif; box-sizing:border-box; }
+    #smax-triage-quickreply-card .cke { width:100% !important; max-width:100%; box-sizing:border-box; }
+    #smax-triage-hud .cke { z-index:1000000 !important; }
+    body .cke_panel, body .cke_combopanel, body .cke_panel_block { z-index:1000003 !important; }
+    body .cke_dialog, body .cke_dialog_container, body .cke_dialog_body, body .cke_dialog_background_cover { z-index:1000005 !important; }
+    body .cke_colorauto .cke_colorbox_color { background-color:#000 !important; }
+    body .cke_colorauto .cke_colorbox { border-color:#000 !important; }
+    body .cke_colorauto { color:#f5f5f5 !important; }
+    #smax-triage-status-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; padding:8px 0 0; border-top:1px solid #1f2937; }
+    #smax-triage-status { font-size:12px; color:#cbd5f5; }
+    #smax-triage-status-row[data-empty="true"] #smax-triage-status { color:#9ca3af; }
+    #smax-triage-attachment-list { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; font-size:12px; color:#94a3b8; min-height:22px; max-width:55%; }
+    #smax-triage-attachment-list[data-state="loading"],
+    #smax-triage-attachment-list[data-state="empty"],
+    #smax-triage-attachment-list[data-state="error"] { display:block; text-align:right; }
+    .smax-attachment-chip { border:1px solid #38bdf8; border-radius:999px; padding:3px 8px; background:transparent; color:#38bdf8; font-size:11px; cursor:pointer; transition:background 0.15s ease, color 0.15s ease; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .smax-attachment-chip:hover { background:#38bdf8; color:#0f172a; }
+    #smax-attachment-modal { position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:1000003; display:none; align-items:center; justify-content:center; padding:30px; }
+    #smax-attachment-modal[data-visible="true"] { display:flex; }
+    #smax-attachment-modal img { max-width:90vw; max-height:90vh; border-radius:10px; box-shadow:0 20px 45px rgba(0,0,0,0.65); }
+    #smax-attachment-modal button { position:absolute; top:18px; right:18px; border:none; width:40px; height:40px; border-radius:50%; background:rgba(15,23,42,0.85); color:#f8fafc; font-size:22px; cursor:pointer; }
+    #smax-attachment-modal .smax-attachment-caption { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); color:#e2e8f0; font-size:14px; text-align:center; max-width:90vw; }
+  `);
+
+  /* ========================================================
+   * Utilities
+   * =======================================================*/
+  const Utils = (() => {
+    const debounce = (fn, wait = 120) => {
+      let timer;
+      return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), wait);
+      };
+    };
+
+    const getGridViewport = (root = document) => root.querySelector('.slick-viewport') || root;
+
+    const parseSmaxDateTime = (str) => {
+      if (!str) return null;
+      const match = str.trim().match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (!match) return null;
+      let [, d, mo, y, h, mi, s] = match;
+      d = parseInt(d, 10);
+      mo = parseInt(mo, 10) - 1;
+      let year = parseInt(y, 10);
+      if (year < 100) year += 2000;
+      h = parseInt(h, 10);
+      mi = parseInt(mi, 10);
+      s = s ? parseInt(s, 10) : 0;
+      return new Date(year, mo, d, h, mi, s).getTime();
+    };
+
+    const parseDigitRanges = (input) => {
+      const digits = [];
+      const parts = (input || '').split(',').map((s) => s.trim()).filter(Boolean);
+      for (const part of parts) {
+        if (part.includes('-')) {
+          const [start, end] = part.split('-').map((s) => parseInt(s.trim(), 10));
+          if (!isNaN(start) && !isNaN(end) && start <= end) {
+            for (let i = start; i <= end; i += 1) digits.push(i);
+          }
+        } else {
+          const num = parseInt(part, 10);
+          if (!isNaN(num)) digits.push(num);
+        }
+      }
+      return [...new Set(digits)].sort((a, b) => a - b);
+    };
+
+    const digitsToRangeString = (digits) => {
+      if (!digits || !digits.length) return '';
+      const sorted = [...new Set(digits)].sort((a, b) => a - b);
+      const ranges = [];
+      let start = sorted[0];
+      let end = sorted[0];
+
+      for (let i = 1; i <= sorted.length; i += 1) {
+        if (i < sorted.length && sorted[i] === end + 1) {
+          end = sorted[i];
+        } else {
+          if (end - start >= 2) ranges.push(`${start}-${end}`);
+          else if (end === start) ranges.push(`${start}`);
+          else ranges.push(`${start},${end}`);
+          start = sorted[i];
+          end = sorted[i];
+        }
+      }
+
+      return ranges.join(',');
+    };
+
+    const extractTrailingDigits = (text) => {
+      const best = String(text || '').match(/(\d{2,})\b(?!.*\d)/);
+      if (best) return best[1];
+      const fallback = String(text || '').match(/(\d+)(?!.*\d)/);
+      return fallback ? fallback[1] : '';
+    };
+
+    const normalizeRequestId = (value) => {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) return '';
+      const digits = trimmed.replace(/\D/g, '');
+      return digits || trimmed;
+    };
+
+    const normalizeAttachmentId = (value) => {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) return '';
+      return trimmed.replace(/^Attachment:/i, '');
+    };
+
+    const locateSolutionEditor = () => {
+      const ck = getPageCKEditor();
+      if (!(ck && ck.instances)) return null;
+      return Object.values(ck.instances).find((inst) => {
+        const el = inst.element && inst.element.$;
+        if (!el) return false;
+        const id = el.id || '';
+        const name = el.getAttribute && el.getAttribute('name') || '';
+        return /solution|solucao|plCkeditor/i.test(`${id} ${name}`);
+      }) || null;
+    };
+
+    const focusSolutionEditor = () => {
+      try {
+        const hasCk = locateSolutionEditor();
+        if (!hasCk) {
+          const editIcon = document.querySelector('.icon-edit.pl-toolbar-item-icon');
+          if (editIcon) editIcon.click();
+        }
+      } catch (err) {
+        console.warn('[SMAX] Failed to toggle CKEditor:', err);
+      }
+
+      setTimeout(() => {
+        try {
+          const inst = locateSolutionEditor();
+          if (inst && typeof inst.focus === 'function') {
+            inst.focus();
+            return;
+          }
+        } catch (err) {
+          console.warn('[SMAX] Failed to focus CKEditor instance:', err);
+        }
+
+        const el = document.querySelector('[name="Solution"], #Solution, [id^="plCkeditor"], [data-aid="preview_Solution"]');
+        if (el && typeof el.focus === 'function') {
+          el.focus();
+          el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      }, 200);
+    };
+
+    const pushSolutionHtml = (html, { append = false } = {}) => new Promise((resolve) => {
+      if (!html) {
+        resolve(false);
+        return;
+      }
+      focusSolutionEditor();
+      let tries = 0;
+      const attempt = () => {
+        const inst = locateSolutionEditor();
+        if (inst && typeof inst.setData === 'function') {
+          try {
+            if (append) inst.setData((inst.getData() || '') + html);
+            else inst.setData(html);
+            if (typeof inst.focus === 'function') inst.focus();
+            resolve(true);
+          } catch (err) {
+            console.warn('[SMAX] Failed to push HTML into solution editor:', err);
+            resolve(false);
+          }
+          return;
+        }
+        if (tries >= 10) {
+          resolve(false);
+          return;
+        }
+        tries += 1;
+        setTimeout(attempt, 250);
+      };
+      attempt();
+    });
+
+    const sanitizeRichText = (html) => {
+      if (!html) return '';
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      tmp.querySelectorAll('script, style').forEach((el) => el.remove());
+      tmp.querySelectorAll('*').forEach((node) => {
+        Array.from(node.attributes || []).forEach((attr) => {
+          if (/^on/i.test(attr.name)) node.removeAttribute(attr.name);
+          if (attr.name.toLowerCase() === 'style') node.removeAttribute(attr.name);
+        });
+      });
+      return tmp.innerHTML;
+    };
+
+    const toAbsoluteUrl = (value) => {
+      if (!value) return '';
+      try {
+        return new URL(value, window.location.origin).href;
+      } catch {
+        return value;
+      }
+    };
+
+    const escapeHtml = (value) => {
+      if (value == null) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
+
+    const onDomReady = (fn) => {
+      if (typeof fn !== 'function') return;
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fn, { once: true });
+      } else {
+        fn();
+      }
+    };
+
+    return {
+      debounce,
+      getGridViewport,
+      parseDigitRanges,
+      digitsToRangeString,
+      parseSmaxDateTime,
+      extractTrailingDigits,
+      locateSolutionEditor,
+      focusSolutionEditor,
+      pushSolutionHtml,
+      sanitizeRichText,
+      escapeHtml,
+      onDomReady,
+      normalizeRequestId,
+      normalizeAttachmentId,
+      toAbsoluteUrl
+    };
+  })();
+
+  /* =========================================================
+   * Color registry for owner badges
+   * =======================================================*/
+  const ColorRegistry = (() => {
+    const ensureStore = () => {
+      if (!prefs.nameColors) prefs.nameColors = {};
+      return prefs.nameColors;
+    };
+
+    const generate = (name) => {
+      let hash = 0;
+      for (let i = 0; i < name.length; i += 1) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const hue = Math.abs(hash % 360);
+      const saturation = 45 + (Math.abs(hash >> 8) % 30);
+      const lightness = 50 + (Math.abs(hash >> 16) % 20);
+      const bg = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+      const fg = lightness > 60 ? '#000' : '#fff';
+      return { bg, fg };
+    };
+
+    const get = (name) => {
+      if (!name) return { bg: '#374151', fg: '#fff' };
+      const store = ensureStore();
+      if (!store[name]) {
+        store[name] = generate(name);
+        savePrefs();
+      }
+      return store[name];
+    };
+
+    const remove = (name) => {
+      const store = ensureStore();
+      if (store[name]) {
+        delete store[name];
+        savePrefs();
+      }
+    };
+
+    return { get, remove };
+  })();
+
+  /* =========================================================
+   * Data repository (requests + people caches)
+   * =======================================================*/
+  const DataRepository = (() => {
+    const triageCache = new Map();
+    let triageIds = [];
+    const peopleCache = new Map();
+    const manualPeopleSeed = [
+      {
+        id: '95970',
+        name: 'ROBSON SOUZA ALVES',
+        upn: 'robsonalves',
+        email: 'robsonalves@tjsp.jus.br',
+        isVip: false,
+        employeeNumber: '367442',
+        firstName: 'ROBSON',
+        lastName: 'SOUZA ALVES',
+        location: '49893064'
+      }
+    ];
+
+    const ensureManualPeople = () => {
+      manualPeopleSeed.forEach((person) => {
+        if (!person || !person.id) return;
+        if (!person.email && !person.upn) return;
+        if (!peopleCache.has(person.id)) peopleCache.set(person.id, Object.assign({}, person));
+      });
+    };
+    let peopleTotal = null;
+    const queueListeners = new Set();
+    const peopleListeners = new Set();
+    ensureManualPeople();
+
+    const notifyQueueListeners = () => {
+      queueListeners.forEach((fn) => {
+        try { fn(); } catch (err) { console.warn('[SMAX] Queue listener failed:', err); }
+      });
+    };
+
+    const notifyPeopleListeners = () => {
+      peopleListeners.forEach((fn) => {
+        try { fn(peopleCache); } catch (err) { console.warn('[SMAX] People listener failed:', err); }
+      });
+    };
+
+    const discussionPurposeLabels = {
+      SolucaoContorno_c: 'Solução de Contorno',
+      FollowUp: 'Acompanhamento',
+      StatusUpdate: 'Atualização de status',
+      Resolution: 'Resolução',
+      Workaround: 'Solução temporária',
+      CustomerResponse: 'Resposta do usuário',
+      AgentResponse: 'Resposta do agente',
+      Information: 'Informação adicional',
+      CommunicationLog: 'Registro de comunicação',
+      WorkLog: 'Registro de trabalho'
+    };
+
+    const mapPurposeLabel = (code) => {
+      if (!code) return 'Discussão';
+      if (discussionPurposeLabels[code]) return discussionPurposeLabels[code];
+      const cleaned = String(code)
+        .replace(/_c$/i, '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/_/g, ' ')
+        .trim();
+      if (!cleaned) return 'Discussão';
+      return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    };
+
+    const mapPrivacyLabel = (privacy) => {
+      if (!privacy) return { code: '', label: 'Interno' };
+      const normalized = String(privacy).toUpperCase();
+      if (normalized === 'PUBLIC') return { code: normalized, label: 'Público' };
+      if (normalized === 'EXTERNAL') return { code: normalized, label: 'Externo' };
+      return { code: normalized, label: 'Interno' };
+    };
+
+    const normalizeCommentEntry = (raw) => {
+      if (!raw || typeof raw !== 'object') return null;
+      const bodySource = raw.CommentBody || raw.Body || raw.body || '';
+      let safeHtml = Utils.sanitizeRichText(bodySource);
+      if (!safeHtml) {
+        const fallback = bodySource ? Utils.escapeHtml(String(bodySource)) : '';
+        safeHtml = fallback;
+      }
+      const tmp = document.createElement('div');
+      tmp.innerHTML = safeHtml;
+      const bodyText = (tmp.textContent || tmp.innerText || '').trim();
+      const timeRaw = raw.CreateTime;
+      let createdTs = 0;
+      if (typeof timeRaw === 'number') createdTs = timeRaw;
+      else if (timeRaw) createdTs = Utils.parseSmaxDateTime(String(timeRaw)) || 0;
+      if (!safeHtml && !bodyText) return null;
+
+      const purposeCode = raw.FunctionalPurpose || '';
+      const { code: privacyCode, label: privacyLabel } = mapPrivacyLabel(raw.PrivacyType || '');
+      const submitter = raw.Submitter || raw.SubmitterId || '';
+      let submitterPersonId = '';
+      if (submitter) {
+        const match = submitter.match(/Person\/(\d+)/i);
+        if (match) submitterPersonId = match[1];
+      }
+      const submitterDisplayCandidates = [raw.SubmitterDisplay, raw.CommentFrom, raw.CommentTo];
+      let submitterDisplay = '';
+      for (const candidate of submitterDisplayCandidates) {
+        if (!candidate) continue;
+        const trimmed = String(candidate).trim();
+        if (trimmed) {
+          submitterDisplay = trimmed;
+          break;
+        }
+      }
+      const actualInterface = (raw.ActualInterface || '').toUpperCase();
+      const systemGenerated = actualInterface === 'SYSTEM';
+      const idFallbackSeed = purposeCode || submitter || 'comment';
+      const id = raw.CommentId || raw.id || raw.Id || `${idFallbackSeed}-${createdTs || Date.now()}`;
+
+      return {
+        id,
+        purposeCode,
+        purposeLabel: mapPurposeLabel(purposeCode),
+        privacyCode,
+        privacyLabel,
+        bodyHtml: safeHtml,
+        bodyText,
+        createdTs,
+        createdRaw: timeRaw || '',
+        systemGenerated,
+        submitter,
+        submitterPersonId,
+        submitterDisplay
+      };
+    };
+
+    const parseCommentsCollection = (value) => {
+      if (!value) return [];
+      let payload = value;
+      if (typeof payload === 'string') {
+        try {
+          payload = JSON.parse(payload);
+        } catch (err) {
+          console.warn('[SMAX] Failed to parse comments payload:', err);
+          return [];
+        }
+      }
+      let list = [];
+      if (Array.isArray(payload)) list = payload;
+      else if (Array.isArray(payload.Comment)) list = payload.Comment;
+      else if (Array.isArray(payload.comments)) list = payload.comments;
+      else if (Array.isArray(payload.complexTypeProperties)) list = payload.complexTypeProperties.map((item) => item && item.properties).filter(Boolean);
+      const normalized = [];
+      list.forEach((entry) => {
+        const parsed = normalizeCommentEntry(entry);
+        if (parsed) normalized.push(parsed);
+      });
+      normalized.sort((a, b) => (a.createdTs || 0) - (b.createdTs || 0));
+      return normalized;
+    };
+
+    const upsertTriageEntryFromProps = (props, rel) => {
+      if (!props) return;
+      const id = props.Id != null ? String(props.Id) : '';
+      if (!id) return;
+
+      const createdRaw = props.CreateTime;
+      let createdText = '';
+      let createdTs = 0;
+      if (typeof createdRaw === 'number') {
+        createdTs = createdRaw;
+        createdText = new Date(createdRaw).toLocaleString();
+      } else if (createdRaw != null) {
+        createdText = String(createdRaw);
+        createdTs = Utils.parseSmaxDateTime(createdText) || 0;
+      }
+
+      const priority = props.Priority || '';
+      const isVipPerson = !!(rel && rel.RequestedForPerson && rel.RequestedForPerson.IsVIP);
+      const isVip = isVipPerson || /VIP/i.test(String(priority));
+
+      const descHtml = props.Description || '';
+      const tmpDiv = document.createElement('div');
+      tmpDiv.innerHTML = String(descHtml);
+      const fullText = (tmpDiv.textContent || tmpDiv.innerText || '').trim();
+      const subjectText = fullText.split('\n')[0] || '';
+      const hasInlineImage = /<img\b/i.test(String(descHtml));
+
+      const solutionHtml = props.Solution || '';
+      const solutionDiv = document.createElement('div');
+      solutionDiv.innerHTML = String(solutionHtml);
+      const solutionText = (solutionDiv.textContent || solutionDiv.innerText || '').trim();
+
+      const idNum = parseInt(id.replace(/\D/g, ''), 10);
+      const existing = triageCache.get(id) || {};
+      let requestedForName = '';
+      const requestedRel = rel && rel.RequestedForPerson ? rel.RequestedForPerson : null;
+      const requestedProps = props && props.RequestedForPerson ? props.RequestedForPerson : null;
+      const requestedCandidates = [
+        requestedRel && requestedRel.DisplayLabel,
+        requestedRel && requestedRel.Name,
+        requestedRel && requestedRel.PrimaryDisplayValue,
+        requestedRel && requestedRel.FullName,
+        requestedProps && requestedProps.DisplayLabel,
+        requestedProps && requestedProps.Name,
+        requestedProps && requestedProps.FullName,
+        props && props.RequestedForDisplayLabel,
+        props && props.RequestedForName
+      ];
+      for (const candidate of requestedCandidates) {
+        if (!candidate) continue;
+        const trimmed = String(candidate).trim();
+        if (trimmed) {
+          requestedForName = trimmed;
+          break;
+        }
+      }
+      if (!requestedForName && existing.requestedForName) requestedForName = existing.requestedForName;
+
+      let discussions = parseCommentsCollection(props.Comments || props.comments);
+      if (!discussions.length && existing.discussions) discussions = existing.discussions;
+
+      triageCache.set(id, Object.assign({}, existing, {
+        idText: id,
+        idNum: Number.isNaN(idNum) ? null : idNum,
+        createdText,
+        createdTs,
+        isVip,
+        subjectText,
+        descriptionHtml: String(descHtml),
+        descriptionText: fullText,
+        hasInlineImage,
+        solutionHtml: String(solutionHtml),
+        solutionText,
+        requestedForName,
+        discussions
+      }));
+    };
+
+    const ingestRequestListPayload = (obj) => {
+      try {
+        if (!obj || typeof obj !== 'object') return;
+        const entities = Array.isArray(obj.entities) ? obj.entities : [];
+        const list = [];
+        for (const ent of entities) {
+          if (!ent || typeof ent !== 'object') continue;
+          const props = ent.properties || {};
+          const rel = ent.related_properties || {};
+          upsertTriageEntryFromProps(props, rel);
+
+          const id = props.Id != null ? String(props.Id) : '';
+          if (!id) continue;
+
+          const createdRaw = props.CreateTime;
+          let createdTs = 0;
+          if (typeof createdRaw === 'number') createdTs = createdRaw;
+
+          const priority = props.Priority || '';
+          const isVipPerson = !!(rel && rel.RequestedForPerson && rel.RequestedForPerson.IsVIP);
+          const isVip = isVipPerson || /VIP/i.test(String(priority));
+
+          const idNum = parseInt(id.replace(/\D/g, ''), 10);
+          list.push({
+            idText: id,
+            idNum: Number.isNaN(idNum) ? null : idNum,
+            createdTs,
+            isVip
+          });
+        }
+
+        if (list.length) {
+          list.sort((a, b) => {
+            if (a.isVip !== b.isVip) return a.isVip ? -1 : 1;
+            if (a.createdTs !== b.createdTs) return a.createdTs - b.createdTs;
+            if (a.idNum != null && b.idNum != null && a.idNum !== b.idNum) return a.idNum - b.idNum;
+            return 0;
+          });
+          triageIds = list;
+          notifyQueueListeners();
+        }
+      } catch (err) {
+        console.warn('[SMAX] Failed to ingest request payload:', err);
+      }
+    };
+
+    const ingestRequestDetailPayload = (obj) => {
+      try {
+        if (!obj || typeof obj !== 'object') return;
+        const entities = Array.isArray(obj.entities) ? obj.entities : [];
+        if (!entities.length) return;
+        const ent = entities[0] || {};
+        upsertTriageEntryFromProps(ent.properties || {}, ent.related_properties || {});
+      } catch (err) {
+        console.warn('[SMAX] Failed to ingest request detail payload:', err);
+      }
+    };
+
+    const ingestPersonListPayload = (obj) => {
+      try {
+        if (!obj || typeof obj !== 'object') return;
+        if (obj.meta && typeof obj.meta.total_count === 'number') {
+          peopleTotal = obj.meta.total_count;
+        }
+        const entities = Array.isArray(obj.entities) ? obj.entities : [];
+        for (const ent of entities) {
+          if (!ent || typeof ent !== 'object') continue;
+          if (ent.entity_type !== 'Person') continue;
+          const props = ent.properties || {};
+          const id = props.Id != null ? String(props.Id) : '';
+          if (!id) continue;
+
+          const payload = {
+            id,
+            name: (props.Name || '').toString().trim(),
+            upn: (props.Upn || '').toString().trim(),
+            email: (props.Email || '').toString().trim(),
+            isVip: !!props.IsVIP,
+            employeeNumber: props.EmployeeNumber || '',
+            firstName: props.FirstName || '',
+            lastName: props.LastName || '',
+            location: props.Location || ''
+          };
+          if (!payload.email && !payload.upn) continue;
+          peopleCache.set(id, payload);
+        }
+        notifyPeopleListeners();
+      } catch (err) {
+        console.warn('[SMAX] Failed to ingest person payload:', err);
+      }
+    };
+
+    const ensurePeopleLoaded = () => {
+      try {
+        const pageSize = 50;
+        const baseUrl = '/rest/213963628/ems/Person?filter=' +
+          encodeURIComponent('(PersonToGroup[Id in (51642955)])') +
+          '&layout=Name,Avatar,Location,IsVIP,OrganizationalGroup,Upn,IsDeleted,FirstName,LastName,EmployeeNumber,Email' +
+          '&meta=totalCount&order=Name+asc';
+
+        const fetchPage = (skip) => {
+          const url = `${baseUrl}&size=${pageSize}&skip=${skip || 0}`;
+          return fetch(url, {
+            credentials: 'include',
+            headers: { Accept: 'application/json, text/plain, */*', 'X-Requested-With': 'XMLHttpRequest' }
+          })
+            .then((r) => r.text())
+            .then((txt) => {
+              if (!txt) return;
+              try {
+                ingestPersonListPayload(JSON.parse(txt));
+              } catch (err) {
+                console.warn('[SMAX] Failed to parse people page:', err);
+              }
+            })
+            .catch(() => {});
+        };
+
+        fetchPage(0).then(() => {
+          if (typeof peopleTotal !== 'number' || peopleTotal <= peopleCache.size) return;
+          const promises = [];
+          for (let skip = pageSize; skip < peopleTotal; skip += pageSize) {
+            promises.push(fetchPage(skip));
+          }
+          Promise.all(promises).then(() => {
+            console.log('[SMAX] People cache ready:', peopleCache.size, '/', peopleTotal);
+          });
+        });
+      } catch (err) {
+        console.warn('[SMAX] Failed to start people loading:', err);
+      }
+    };
+
+    const ensureRequestPayload = (id, { force = false } = {}) => {
+      const key = String(id || '').replace(/\D/g, '') || String(id || '');
+      if (!key) return Promise.resolve(null);
+      const cachedValue = () => triageCache.get(key) || null;
+      if (!force && triageCache.has(key)) return Promise.resolve(cachedValue());
+
+      try {
+        const xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+        const xsrfToken = xsrfMatch ? decodeURIComponent(xsrfMatch[1]) : null;
+        const headers = { Accept: 'application/json, text/plain, */*', 'X-Requested-With': 'XMLHttpRequest' };
+        if (xsrfToken) headers['X-XSRF-TOKEN'] = xsrfToken;
+        const url = `/rest/213963628/ems/Request/${encodeURIComponent(key)}?layout=FULL_LAYOUT,RELATION_LAYOUT.item`;
+        return fetch(url, { method: 'GET', credentials: 'include', headers })
+          .then((r) => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+          })
+          .then((txt) => {
+            if (!txt) return cachedValue();
+            try {
+              const parsed = JSON.parse(txt);
+              const entities = Array.isArray(parsed.entities) ? parsed.entities : [];
+              if (!entities.length) return cachedValue();
+              const ent = entities[0] || {};
+              upsertTriageEntryFromProps(ent.properties || {}, ent.related_properties || {});
+              return cachedValue();
+            } catch {
+              return cachedValue();
+            }
+          })
+          .catch(() => cachedValue());
+      } catch (err) {
+        console.warn('[SMAX] Failed to ensure triage payload:', err);
+        return Promise.resolve(cachedValue());
+      }
+    };
+
+    const updateCachedSolution = (id, html) => {
+      const key = String(id || '');
+      if (!key || !triageCache.has(key)) return;
+      const current = triageCache.get(key) || {};
+      const safeHtml = html != null ? String(html) : '';
+      const tmp = document.createElement('div');
+      tmp.innerHTML = safeHtml;
+      const text = (tmp.textContent || tmp.innerText || '').trim();
+      triageCache.set(key, Object.assign({}, current, {
+        solutionHtml: safeHtml,
+        solutionText: text
+      }));
+    };
+
+    return {
+      triageCache,
+      getTriageQueueSnapshot: () => triageIds.slice(),
+      peopleCache,
+      ingestRequestListPayload,
+      ingestPersonListPayload,
+      ensurePeopleLoaded,
+      ensureRequestPayload,
+      upsertTriageEntryFromProps,
+      ingestRequestDetailPayload,
+      updateCachedSolution,
+      onQueueUpdate: (fn) => {
+        if (typeof fn === 'function') queueListeners.add(fn);
+      },
+      onPeopleUpdate: (fn) => {
+        if (typeof fn !== 'function') return () => {};
+        peopleListeners.add(fn);
+        return () => peopleListeners.delete(fn);
+      }
+    };
+  })();
+
+  /* =========================================================
+   * Distribution (digits -> owner)
+   * =======================================================*/
+  const Distribution = (() => {
+    const mapping = new Map();
+    let currentAusentes = [];
+
+    const rebuild = () => {
+      mapping.clear();
+      const groups = prefs.nameGroups || {};
+      const ausentes = prefs.ausentes || [];
+      Object.entries(groups).forEach(([name, digits]) => {
+        digits.forEach((digit) => {
+          const key = String(digit).padStart(2, '0');
+          mapping.set(key, name);
+        });
+      });
+      currentAusentes = ausentes.slice();
+    };
+
+    const isActive = (name) => name && !currentAusentes.includes(name);
+
+    const ownerForDigits = (digits) => {
+      const cleaned = (digits || '').replace(/\D/g, '');
+      if (cleaned.length < 2) return null;
+      for (let i = cleaned.length; i >= 2; i -= 1) {
+        const pair = cleaned.slice(i - 2, i);
+        const owner = mapping.get(pair);
+        if (!owner) continue;
+        if (isActive(owner)) return owner;
+      }
+      return null;
+    };
+
+    rebuild();
+
+    return { rebuild, ownerForDigits };
+  })();
+
+  /* =========================================================
+   * Refresh overlay helper
+   * =======================================================*/
+  const RefreshOverlay = (() => {
+    let overlay;
+    const ensureOverlay = () => {
+      if (overlay) return overlay;
+      overlay = document.createElement('div');
+      overlay.id = 'smax-refresh-overlay';
+      overlay.innerHTML = `
+        <div id="smax-refresh-overlay-inner">
+          <button id="smax-refresh-now" title="Atualizar página">&#x21bb;</button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      const btn = overlay.querySelector('#smax-refresh-now');
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.location.reload();
+        });
+      }
+      return overlay;
+    };
+
+    const show = () => {
+      ensureOverlay().style.display = 'flex';
+    };
+
+    return { show };
+  })();
+
+  /* =========================================================
+   * Network patch (intercept SMAX payloads)
+   * =======================================================*/
+  const Network = (() => {
+    let patched = false;
+    const isRequestDetailUrl = (url = '') => /\/rest\/\d+\/ems\/Request\/\d+/i.test(url);
+    const isRequestListUrl = (url = '') => /\/rest\/\d+\/ems\/Request(?:\?|$)/i.test(url) && !isRequestDetailUrl(url);
+
+    const patch = () => {
+      if (patched) return;
+      patched = true;
+      try {
+        const origOpen = XMLHttpRequest.prototype.open;
+        const origSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function patchedOpen(method, url, ...rest) {
+          try { this.__smaxUrl = url; } catch {}
+          return origOpen.call(this, method, url, ...rest);
+        };
+        XMLHttpRequest.prototype.send = function patchedSend(body) {
+          this.addEventListener('load', function onLoad() {
+            try {
+              const url = this.__smaxUrl || this.responseURL || '';
+              if (!/\/rest\/\d+\/ems\/(Request|Person)/i.test(url)) return;
+              if (!this.responseText) return;
+              const json = JSON.parse(this.responseText);
+              if (isRequestListUrl(url)) {
+                DataRepository.ingestRequestListPayload(json);
+              } else if (isRequestDetailUrl(url)) {
+                DataRepository.ingestRequestDetailPayload(json);
+              } else if (/\/rest\/\d+\/ems\/Person/i.test(url)) {
+                DataRepository.ingestPersonListPayload(json);
+              }
+            } catch {}
+          });
+          return origSend.call(this, body);
+        };
+
+        if (window.fetch) {
+          const origFetch = window.fetch;
+          window.fetch = function patchedFetch(input, init) {
+            return origFetch(input, init).then((resp) => {
+              try {
+                const url = resp.url || (typeof input === 'string' ? input : '');
+                if (!/\/rest\/\d+\/ems\/(Request|Person)/i.test(url)) return resp;
+                const clone = resp.clone();
+                clone.text().then((txt) => {
+                  try {
+                    if (!txt) return;
+                    const json = JSON.parse(txt);
+                    if (isRequestListUrl(url)) {
+                      DataRepository.ingestRequestListPayload(json);
+                    } else if (isRequestDetailUrl(url)) {
+                      DataRepository.ingestRequestDetailPayload(json);
+                    } else if (/\/rest\/\d+\/ems\/Person/i.test(url)) {
+                      DataRepository.ingestPersonListPayload(json);
+                    }
+                  } catch {}
+                });
+              } catch {}
+              return resp;
+            });
+          };
+        }
+      } catch (err) {
+        console.warn('[SMAX] Failed to patch network:', err);
+      }
+    };
+
+    return { patch };
+  })();
+
+  Network.patch();
+
+  /* =========================================================
+   * API helpers for real updates
+   * =======================================================*/
+  const Api = (() => {
+    const withXsrfHeaders = () => {
+      const xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+      const xsrfToken = xsrfMatch ? decodeURIComponent(xsrfMatch[1]) : null;
+      const headers = {
+        Accept: 'application/json, text/plain, */*',
+        'Content-Type': 'application/json;charset=utf-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      };
+      if (xsrfToken) headers['X-XSRF-TOKEN'] = xsrfToken;
+      return headers;
+    };
+
+    const postUpdateRequest = (props) => {
+      if (!prefs.enableRealWrites) {
+        console.warn('[SMAX] Real writes disabled.');
+        return Promise.resolve({ skipped: true, reason: 'real-writes-disabled' });
+      }
+      if (!props || !props.Id) {
+        console.warn('[SMAX] postUpdateRequest missing Id.');
+        return Promise.resolve(null);
+      }
+      const body = {
+        entities: [{ entity_type: 'Request', properties: { ...props } }],
+        operation: 'UPDATE'
+      };
+      return fetch('/rest/213963628/ems/bulk', {
+        method: 'POST',
+        credentials: 'include',
+        headers: withXsrfHeaders(),
+        body: JSON.stringify(body)
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.text();
+        })
+        .then((txt) => {
+          try { return txt ? JSON.parse(txt) : null; } catch { return null; }
+        })
+        .catch((err) => {
+          console.warn('[SMAX] postUpdateRequest failed:', err);
+          return null;
+        });
+    };
+
+    const postCreateRequestCausesRequest = (globalId, childId) => {
+      if (!prefs.enableRealWrites) {
+        console.warn('[SMAX] Real writes disabled.');
+        return Promise.resolve({ skipped: true, reason: 'real-writes-disabled' });
+      }
+      const parent = String(globalId || '').trim();
+      const child = String(childId || '').trim();
+      if (!parent || !child) {
+        console.warn('[SMAX] Missing ids for RequestCausesRequest.');
+        return Promise.resolve(null);
+      }
+      const body = {
+        relationships: [{
+          name: 'RequestCausesRequest',
+          firstEndpoint: { Request: parent },
+          secondEndpoint: { Request: child }
+        }],
+        operation: 'CREATE'
+      };
+      return fetch('/rest/213963628/ems/bulk', {
+        method: 'POST',
+        credentials: 'include',
+        headers: withXsrfHeaders(),
+        body: JSON.stringify(body)
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.text();
+        })
+        .then((txt) => {
+          try { return txt ? JSON.parse(txt) : null; } catch { return null; }
+        })
+        .catch((err) => {
+          console.warn('[SMAX] postCreateRequestCausesRequest failed:', err);
+          return null;
+        });
+    };
+
+    return { postUpdateRequest, postCreateRequestCausesRequest };
+  })();
+
+  /* =========================================================
+   * Attachment fetcher + preview
+   * =======================================================*/
+  const AttachmentService = (() => {
+    const cache = new Map();
+    const inflight = new Map();
+
+    const normalizeCacheKey = (value) => Utils.normalizeRequestId(value);
+
+    const formatParentReference = (value) => {
+      const normalized = normalizeCacheKey(value);
+      if (!normalized) return '';
+      return /^Request:/i.test(normalized) ? normalized : `Request:${normalized}`;
+    };
+
+    const uniqueList = (list) => [...new Set((list || []).filter(Boolean))];
+
+    const isTruthyFlag = (value) => {
+      if (typeof value === 'string') return value.toLowerCase() === 'true';
+      return Boolean(value);
+    };
+
+    const pickAttachmentLabel = (entry) => {
+      if (!entry) return '';
+      const candidates = [
+        entry.file_name,
+        entry.FileName,
+        entry.DownloadFileName,
+        entry.name,
+        entry.Name
+      ];
+      for (const candidate of candidates) {
+        if (candidate == null) continue;
+        const trimmed = String(candidate).trim();
+        if (trimmed) return trimmed;
+      }
+      return '';
+    };
+
+    const shouldSkipAttachmentProps = (props) => {
+      if (!props) return true;
+      const hiddenFlag = props.IsHidden ?? props.isHidden;
+      if (isTruthyFlag(hiddenFlag)) return true;
+      const label = pickAttachmentLabel(props);
+      if (!label) return true;
+      if (/^text-editor-img/i.test(label)) return true;
+      return false;
+    };
+
+    const buildFrsFileUrl = (attachmentId, { size, draftMode } = {}) => {
+      const normalized = Utils.normalizeAttachmentId(attachmentId) || attachmentId;
+      if (!normalized) return '';
+      const params = new URLSearchParams();
+      if (size != null && size !== '') params.set('s', size);
+      if (draftMode) params.set('draftMode', 'true');
+      const query = params.toString();
+      return `/rest/213963628/frs/file-list/${encodeURIComponent(normalized)}${query ? `?${query}` : ''}`;
+    };
+
+    const buildDownloadCandidates = (id, fileList = [], context = {}) => {
+      const normalizedId = Utils.normalizeAttachmentId(id);
+      if (!normalizedId) return [];
+      const attachmentVariants = uniqueList([normalizedId, `Attachment:${normalizedId}`]);
+      const parentId = normalizeCacheKey(context.parentId);
+      const sizeHint = context.sizeHint != null ? context.sizeHint : context.sizeParam;
+      const candidates = [];
+
+      if (Array.isArray(fileList) && fileList.length) {
+        fileList.forEach((entry) => {
+          const direct = entry?.href || entry?.url || entry?.link;
+          if (direct) candidates.push(Utils.toAbsoluteUrl(direct));
+        });
+      }
+
+      const frsDirect = buildFrsFileUrl(normalizedId, { size: sizeHint });
+      if (frsDirect) candidates.push(frsDirect);
+      const frsDraft = buildFrsFileUrl(normalizedId, { size: sizeHint, draftMode: true });
+      if (frsDraft) candidates.push(frsDraft);
+
+      attachmentVariants.forEach((variant) => {
+        if (parentId) {
+          const params = new URLSearchParams({ attachmentId: variant });
+          if (context.fileNameParam) params.append('fileName', context.fileNameParam);
+          candidates.push(`/rest/213963628/entity-page/attachment/Request/${encodeURIComponent(parentId)}?${params.toString()}`);
+        }
+        candidates.push(`/rest/213963628/entity-page/attachment/Attachment/${encodeURIComponent(variant)}`);
+        candidates.push(`/rest/213963628/entity-page/attachment/Attachment/${encodeURIComponent(variant)}?attachmentId=${encodeURIComponent(variant)}`);
+        candidates.push(`/rest/213963628/ems/file-list/Attachment/${encodeURIComponent(variant)}`);
+      });
+
+      return uniqueList(candidates);
+    };
+    const buildDefaultHeaders = () => {
+      const headers = { Accept: 'application/json, text/plain, */*', 'X-Requested-With': 'XMLHttpRequest' };
+      const xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+      if (xsrfMatch) headers['X-XSRF-TOKEN'] = decodeURIComponent(xsrfMatch[1]);
+      return headers;
+    };
+
+    const toAttachmentRecord = ({ id, name, mime, size, extension, fileList, context = {} }) => {
+      const safeId = (id != null ? String(id) : '').trim();
+      if (!safeId) return null;
+      const label = (name || `Anexo ${safeId}`).toString();
+      const lower = label.toLowerCase();
+      const ext = (extension || (lower.includes('.') ? lower.split('.').pop() : '') || '').toLowerCase();
+      const mimeType = (mime || '').toLowerCase();
+      const downloadCandidates = buildDownloadCandidates(
+        safeId,
+        fileList,
+        Object.assign({}, context, {
+          fileNameParam: context.fileNameParam || label,
+          sizeHint: context.sizeHint != null ? context.sizeHint : size
+        })
+      );
+      if (!downloadCandidates.length) return null;
+      const isPdf = mimeType.includes('pdf') || ext === 'pdf';
+      const isImage = mimeType.startsWith('image/') || /^(png|jpe?g|gif|bmp|webp|svg)$/i.test(ext);
+      return {
+        id: safeId,
+        name: label,
+        mimeType,
+        size: Number(size) || 0,
+        extension: ext,
+        downloadUrl: downloadCandidates[0],
+        downloadCandidates,
+        parentId: context.parentId ? normalizeCacheKey(context.parentId) : '',
+        isPdf,
+        isImage
+      };
+    };
+
+    const parseAttachmentEntities = (payload, { parentId } = {}) => {
+      const entities = Array.isArray(payload?.entities) ? payload.entities : [];
+      const normalized = [];
+      entities.forEach((entity) => {
+        const props = entity?.properties || {};
+        if (shouldSkipAttachmentProps(props)) return;
+        const record = toAttachmentRecord({
+          id: props.Id != null ? props.Id : (entity?.entity_id || null),
+          name: pickAttachmentLabel(props),
+          mime: props.MimeType || props.ContentType,
+          size: props.FileSize || props.Size,
+          extension: props.FileExtension,
+          fileList: props.file_list || props.FileList || entity?.file_list || [],
+          context: { parentId }
+        });
+        if (record) normalized.push(record);
+      });
+      return normalized;
+    };
+
+    const parseRequestAttachmentValue = (value, { requestId } = {}) => {
+      if (!value) return [];
+      let payload = value;
+      if (typeof payload === 'string') {
+        try {
+          payload = JSON.parse(payload);
+        } catch (err) {
+          console.warn('[SMAX] Failed to parse RequestAttachments JSON:', err);
+          return [];
+        }
+      }
+      let list = [];
+      if (Array.isArray(payload?.complexTypeProperties)) {
+        list = payload.complexTypeProperties.map((item) => (item && item.properties) ? item.properties : item);
+      } else if (Array.isArray(payload)) {
+        list = payload;
+      } else if (payload && typeof payload === 'object') {
+        list = payload.properties ? [payload.properties] : [];
+      }
+      const normalized = [];
+      list.forEach((entry) => {
+        if (!entry) return;
+        if (shouldSkipAttachmentProps(entry)) return;
+        const record = toAttachmentRecord({
+          id: entry.id || entry.Id,
+          name: pickAttachmentLabel(entry),
+          mime: entry.mime_type || entry.MimeType || entry.content_type,
+          size: entry.size || entry.FileSize,
+          extension: entry.file_extension || entry.FileExtension,
+          fileList: entry.file_list || entry.FileList || [],
+          context: { parentId: requestId }
+        });
+        if (record) normalized.push(record);
+      });
+      return normalized;
+    };
+
+    const fetchViaAttachmentEntity = (requestId) => {
+      const parentRef = formatParentReference(requestId);
+      const filter = encodeURIComponent(`ParentEntity.Id = "${parentRef}"`);
+      const layout = encodeURIComponent('Id,Name,FileName,MimeType,FileSize,file_list');
+      const url = `/rest/213963628/ems/Attachment?filter=${filter}&layout=${layout}`;
+      return fetch(url, { method: 'GET', credentials: 'include', headers: buildDefaultHeaders() })
+        .then((r) => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.text();
+        })
+        .then((txt) => {
+          if (!txt) return [];
+          try {
+            return parseAttachmentEntities(JSON.parse(txt), { parentId: requestId });
+          } catch (err) {
+            console.warn('[SMAX] Failed to parse attachment payload:', err);
+            return [];
+          }
+        })
+        .catch((err) => {
+          console.warn('[SMAX] Attachment entity lookup failed:', err);
+          return [];
+        });
+    };
+
+    const fetchViaEntityPage = (requestId) => {
+      const normalizedId = normalizeCacheKey(requestId);
+      if (!normalizedId) return Promise.resolve(null);
+      const layoutParam = encodeURIComponent('FORM_LAYOUT.withoutResolution,FORM_LAYOUT.onlyResolution');
+      const url = `/rest/213963628/entity-page/initializationDataByLayout/Request/${encodeURIComponent(normalizedId)}?layout=${layoutParam}`;
+      return fetch(url, { method: 'GET', credentials: 'include', headers: buildDefaultHeaders() })
+        .then((r) => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.text();
+        })
+        .then((txt) => {
+          if (!txt) return [];
+          try {
+            const payload = JSON.parse(txt);
+            const attachmentsRaw = payload?.EntityData?.properties?.RequestAttachments;
+            return parseRequestAttachmentValue(attachmentsRaw, { requestId: normalizedId });
+          } catch (err) {
+            console.warn('[SMAX] Failed to parse initializationData attachments:', err);
+            return [];
+          }
+        })
+        .catch((err) => {
+          console.warn('[SMAX] initializationData attachment lookup failed:', err);
+          return null;
+        });
+    };
+
+    const fetchList = (requestId) => {
+      const cacheKey = normalizeCacheKey(requestId);
+      if (!cacheKey) return Promise.resolve([]);
+      if (cache.has(cacheKey)) return Promise.resolve(cache.get(cacheKey));
+      if (inflight.has(cacheKey)) return inflight.get(cacheKey);
+
+      const promise = fetchViaEntityPage(requestId)
+        .then((list) => (list !== null ? list : fetchViaAttachmentEntity(requestId)))
+        .then((list) => {
+          const safeList = Array.isArray(list) ? list : [];
+          cache.set(cacheKey, safeList);
+          inflight.delete(cacheKey);
+          return safeList;
+        })
+        .catch((err) => {
+          inflight.delete(cacheKey);
+          console.warn('[SMAX] Failed to load attachments for', requestId, err);
+          cache.set(cacheKey, []);
+          return [];
+        });
+
+      inflight.set(cacheKey, promise);
+      return promise;
+    };
+
+    const fetchAttachmentMetadata = async (attachmentId) => {
+      const normalizedId = Utils.normalizeAttachmentId(attachmentId);
+      if (!normalizedId) return null;
+      const variants = uniqueList([normalizedId, `Attachment:${normalizedId}`]);
+      for (const variant of variants) {
+        const url = `/rest/213963628/ems/Attachment/${encodeURIComponent(variant)}?layout=Id,Name,FileName,file_list,FileList`;
+        try {
+          const resp = await fetch(url, { method: 'GET', credentials: 'include', headers: buildDefaultHeaders() });
+          if (!resp.ok) continue;
+          const txt = await resp.text();
+          if (!txt) continue;
+          const parsed = JSON.parse(txt);
+          const entity = Array.isArray(parsed?.entities) ? parsed.entities[0] : null;
+          if (!entity) continue;
+          const props = entity.properties || {};
+          const fileList = props.file_list || props.FileList || entity.file_list || entity.FileList;
+          if (Array.isArray(fileList) && fileList.length) {
+            return { fileList };
+          }
+        } catch (err) {
+          console.warn('[SMAX] Failed to resolve attachment metadata for', variant, err);
+        }
+      }
+      return null;
+    };
+
+    const ensureDownloadCandidates = async (attachment) => {
+      if (!attachment) return [];
+      const existing = Array.isArray(attachment.downloadCandidates) ? attachment.downloadCandidates.filter(Boolean) : [];
+      if (existing.length) return existing;
+      if (attachment._resolvingCandidates) return attachment._resolvingCandidates;
+
+      attachment._resolvingCandidates = (async () => {
+        const metadata = await fetchAttachmentMetadata(attachment.id);
+        if (metadata && Array.isArray(metadata.fileList)) {
+          const extra = buildDownloadCandidates(attachment.id, metadata.fileList, { parentId: attachment.parentId, fileNameParam: attachment.name });
+          if (extra.length) {
+            attachment.downloadCandidates = extra;
+            attachment.downloadUrl = extra[0];
+            return extra;
+          }
+        }
+        return [];
+      })()
+        .catch((err) => {
+          console.warn('[SMAX] Failed to fetch attachment download list:', err);
+          return [];
+        })
+        .finally(() => {
+          attachment._resolvingCandidates = null;
+        });
+
+      const resolved = await attachment._resolvingCandidates;
+      return Array.isArray(resolved) ? resolved : [];
+    };
+
+    const AttachmentPreviewer = (() => {
+      let modal;
+      let img;
+      let caption;
+      let closeBtn;
+      let activeObjectUrl = '';
+
+      const ensureModal = () => {
+        if (modal) return;
+        modal = document.createElement('div');
+        modal.id = 'smax-attachment-modal';
+        img = document.createElement('img');
+        caption = document.createElement('div');
+        caption.className = 'smax-attachment-caption';
+        closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.textContent = '✖';
+        closeBtn.addEventListener('click', hideModal);
+        modal.appendChild(closeBtn);
+        modal.appendChild(img);
+        modal.appendChild(caption);
+        modal.addEventListener('click', (evt) => {
+          if (evt.target === modal) hideModal();
+        });
+        document.body.appendChild(modal);
+      };
+
+      const hideModal = () => {
+        if (!modal) return;
+        modal.dataset.visible = 'false';
+        if (activeObjectUrl) {
+          URL.revokeObjectURL(activeObjectUrl);
+          activeObjectUrl = '';
+        }
+      };
+
+      const showImage = (objectUrl, title) => {
+        ensureModal();
+        activeObjectUrl = objectUrl;
+        img.src = objectUrl;
+        caption.textContent = title || '';
+        modal.dataset.visible = 'true';
+      };
+
+      const openPdf = async (blobUrl) => {
+        const win = window.open(blobUrl, '_blank');
+        if (!win) {
+          alert('Pop-up bloqueado ao abrir PDF. Permita pop-ups para esta página.');
+          URL.revokeObjectURL(blobUrl);
+          return;
+        }
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      };
+
+      const fetchBlobUrl = async (attachment) => {
+        const gatherCandidates = async () => {
+          const initial = Array.isArray(attachment?.downloadCandidates) ? attachment.downloadCandidates.filter(Boolean) : [];
+          if (initial.length) return initial;
+          await ensureDownloadCandidates(attachment);
+          return Array.isArray(attachment?.downloadCandidates) ? attachment.downloadCandidates.filter(Boolean) : [];
+        };
+
+        const resolved = await gatherCandidates();
+        const candidates = resolved.length
+          ? resolved
+          : (attachment?.downloadUrl ? [attachment.downloadUrl] : []);
+
+        if (!candidates.length) throw new Error('Não consegui localizar o arquivo deste anexo.');
+        let lastError;
+        for (const url of candidates) {
+          try {
+            const resp = await fetch(url, { credentials: 'include' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const blob = await resp.blob();
+            return { objectUrl: URL.createObjectURL(blob), sourceUrl: url };
+          } catch (err) {
+            lastError = err;
+          }
+        }
+        throw lastError || new Error('Não consegui baixar este anexo.');
+      };
+
+      const triggerFileDownload = (objectUrl, filename) => {
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = filename || 'anexo';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+      };
+
+      const open = async (attachment) => {
+        if (!attachment || (!attachment.downloadUrl && !attachment.downloadCandidates)) {
+          alert('Não consegui localizar o arquivo deste anexo.');
+          return;
+        }
+        try {
+          if (attachment.isImage) {
+            const { objectUrl } = await fetchBlobUrl(attachment);
+            showImage(objectUrl, attachment.name);
+            return;
+          }
+          if (attachment.isPdf) {
+            const { objectUrl } = await fetchBlobUrl(attachment);
+            await openPdf(objectUrl);
+            return;
+          }
+          const { objectUrl } = await fetchBlobUrl(attachment);
+          triggerFileDownload(objectUrl, attachment.name);
+        } catch (err) {
+          alert('Erro ao abrir anexo: ' + err.message);
+        }
+      };
+
+      return { open };
+    })();
+
+    const preview = (attachment) => AttachmentPreviewer.open(attachment);
+
+    return { fetchList, preview };
+  })();
+
+  /* =========================================================
+   * Name badges
+   * =======================================================*/
+  const NameBadges = (() => {
+    const processed = new WeakSet();
+    const NAME_MARK_ATTR = 'adMarcado';
+
+    const pickAllLinks = () => {
+      const sel = new Set();
+      const viewport = Utils.getGridViewport();
+      if (!viewport) return [];
+      ['a.entity-link-id', '.slick-row a'].forEach((selector) => {
+        viewport.querySelectorAll(selector).forEach((anchor) => sel.add(anchor));
+      });
+      return Array.from(sel);
+    };
+
+    const apply = () => {
+      if (!prefs.nameBadgesOn) return;
+      pickAllLinks().forEach((link) => {
+        if (!link || processed.has(link)) return;
+        processed.add(link);
+        const label = (link.textContent || '').trim();
+        const digits = Utils.extractTrailingDigits(label);
+        const owner = Distribution.ownerForDigits(digits);
+        const cell = link.closest('.slick-cell');
+
+        if (cell) {
+          cell.classList.add('tmx-namecell');
+          if (owner) {
+            const { bg, fg } = ColorRegistry.get(owner);
+            cell.style.background = bg;
+            cell.style.color = fg;
+            cell.querySelectorAll('a').forEach((a) => { a.style.color = 'inherit'; });
+          } else {
+            cell.style.background = '#d32f2f';
+            cell.style.color = '#fff';
+            cell.querySelectorAll('a').forEach((a) => { a.style.color = 'inherit'; });
+          }
+        }
+
+        if (!link.dataset[NAME_MARK_ATTR]) {
+          const tag = document.createElement('span');
+          tag.style.marginLeft = '6px';
+          tag.style.fontWeight = '600';
+          tag.style.padding = '0 4px';
+          tag.style.borderRadius = '4px';
+          if (owner) {
+            const { bg, fg } = ColorRegistry.get(owner);
+            tag.textContent = ` ${owner}`;
+            tag.style.background = bg;
+            tag.style.color = fg;
+          } else {
+            tag.textContent = ' SEM DONO';
+            tag.style.background = '#fff';
+            tag.style.color = '#d32f2f';
+            tag.style.border = '2px solid #d32f2f';
+          }
+          link.insertAdjacentElement('afterend', tag);
+          link.dataset[NAME_MARK_ATTR] = '1';
+        }
+      });
+    };
+
+    return { apply };
+  })();
+
+  /* =========================================================
+   * Settings panel
+   * =======================================================*/
+  const SettingsPanel = (() => {
+    let container;
+    let toggleBtn;
+    let detachPeopleWatcher;
+
+    const buildNameRows = () => {
+      const nameGroups = prefs.nameGroups || {};
+      const ausentes = prefs.ausentes || [];
+      const sortedNames = Object.keys(nameGroups).sort();
+      if (!sortedNames.length) {
+        return '<div style="color:#555;">Nenhuma pessoa adicionada ainda.</div>';
+      }
+      return sortedNames.map((name) => {
+        const digits = nameGroups[name];
+        const rangeStr = Utils.digitsToRangeString(digits);
+        const isAbsent = ausentes.includes(name);
+        const bg = isAbsent ? '#ffe0e0' : '#f9f9f9';
+        return `
+          <div style="margin-bottom:10px;padding:8px;background:${bg};border-radius:4px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+              <span style="min-width:140px;font-weight:600;">${name}</span>
+              <label class="smax-absent-wrapper">
+                <input type="checkbox" class="smax-name-absent smax-absent-input" data-name="${name}" ${isAbsent ? 'checked' : ''}>
+                <span class="smax-absent-box"></span>
+                Ausente
+              </label>
+              <input type="text" class="smax-name-digits" data-name="${name}" value="${rangeStr}"
+                    style="flex:1;padding:6px;border:1px solid #ccc;border-radius:3px;font-family:monospace;"
+                    placeholder="0-6 ou 7,8,10-15">
+              <button class="smax-remove-name" data-name="${name}"
+                      style="padding:4px 8px;background:#d32f2f;color:#fff;border:none;border-radius:3px;cursor:pointer;">
+                ✕
+              </button>
+            </div>
+          </div>`;
+      }).join('');
+    };
+
+    const buildSelfSelectOptions = () => {
+      const selectedId = prefs.myPersonId ? String(prefs.myPersonId) : '';
+      const placeholder = DataRepository.peopleCache.size ? 'Escolha seu nome...' : 'Carregando pessoas...';
+      const options = [`<option value="" ${selectedId ? '' : 'selected'}>${placeholder}</option>`];
+      const people = Array.from(DataRepository.peopleCache.values())
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      if (selectedId && prefs.myPersonName && !people.some((p) => String(p.id) === selectedId)) {
+        options.push(`<option value="${Utils.escapeHtml(selectedId)}" data-name="${Utils.escapeHtml(prefs.myPersonName || '')}" selected>${Utils.escapeHtml(prefs.myPersonName || 'Selecionado anteriormente')}</option>`);
+      }
+      people.forEach((p) => {
+        const value = Utils.escapeHtml(String(p.id || ''));
+        const label = Utils.escapeHtml(p.name || '');
+        const selected = selectedId && String(p.id) === selectedId ? 'selected' : '';
+        options.push(`<option value="${value}" data-name="${label}" ${selected}>${label}</option>`);
+      });
+      return options.join('');
+    };
+
+    const renderPanel = () => {
+      if (!container) return;
+      container.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:#444;">
+            Distribuição de chamados
+          </div>
+        </div>
+
+        <div id="smax-realwrites-panel" style="margin-bottom:10px;padding:8px 10px;border-radius:6px;border:1px solid #ddd;display:flex;align-items:center;justify-content:space-between;gap:10px;${prefs.enableRealWrites ? 'background:#fff7ed;border-color:#fdba74;' : ''}">
+          <div style="display:flex;flex-direction:column;font-size:12px;color:#333;">
+            <span style="font-weight:600;">Modo real (gravar no SMAX)</span>
+            <span style="opacity:0.8;">Quando ativo, urgência, atribuição e vínculo ao global salvam de verdade.</span>
+          </div>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+            <input type="checkbox" id="smax-realwrites-toggle" ${prefs.enableRealWrites ? 'checked' : ''} />
+            <span>${prefs.enableRealWrites ? 'Ativo' : 'Ativar'}</span>
+          </label>
+        </div>
+
+        <div id="smax-self-assign-panel" style="margin-bottom:12px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:#1f2937;">
+          <label for="smax-self-select" style="font-weight:600;">Responsável pelas respostas rápidas:</label>
+          <select id="smax-self-select" style="padding:6px 10px;border-radius:6px;border:1px solid #cbd5f5;background:#fff;font-size:12px;">
+            ${buildSelfSelectOptions()}
+          </select>
+        </div>
+
+        <div style="margin-bottom:10px;border:1px solid #ddd;border-radius:6px;padding:8px 8px 6px;display:flex;flex-direction:column;gap:6px;">
+          <input type="text" id="smax-person-search" placeholder="Adicionar pessoa"
+                style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
+          <div id="smax-person-results" style="max-height:140px;overflow:auto;font-size:12px;"></div>
+        </div>
+
+        <div id="smax-team-list">${buildNameRows()}</div>
+      `;
+      wirePanelEvents();
+      refreshSelfSelectOptions();
+    };
+
+    const refreshSelfSelectOptions = () => {
+      if (!container) return;
+      const select = container.querySelector('#smax-self-select');
+      if (!select) return;
+      const previousValue = prefs.myPersonId ? String(prefs.myPersonId) : select.value;
+      select.innerHTML = buildSelfSelectOptions();
+      if (prefs.myPersonId) {
+        select.value = String(prefs.myPersonId);
+      } else if (previousValue && select.querySelector(`option[value="${previousValue}"]`)) {
+        select.value = previousValue;
+      } else {
+        select.selectedIndex = 0;
+      }
+    };
+
+    const ensurePeopleWatcher = () => {
+      if (detachPeopleWatcher || typeof DataRepository.onPeopleUpdate !== 'function') return;
+      detachPeopleWatcher = DataRepository.onPeopleUpdate(() => {
+        refreshSelfSelectOptions();
+      });
+    };
+
+    const wirePanelEvents = () => {
+      const realToggle = container.querySelector('#smax-realwrites-toggle');
+      const realPanel = container.querySelector('#smax-realwrites-panel');
+      if (realToggle && realPanel) {
+        realToggle.addEventListener('change', () => {
+          prefs.enableRealWrites = !!realToggle.checked;
+          savePrefs();
+          if (realToggle.checked) {
+            realPanel.style.background = '#fff7ed';
+            realPanel.style.borderColor = '#fdba74';
+            realPanel.querySelector('span:last-child').textContent = 'Ativo';
+          } else {
+            realPanel.style.background = '';
+            realPanel.style.borderColor = '#ddd';
+            realPanel.querySelector('span:last-child').textContent = 'Ativar';
+          }
+          const flag = document.getElementById('smax-triage-real-flag');
+          if (flag) flag.style.display = prefs.enableRealWrites ? 'block' : 'none';
+        });
+      }
+
+      const searchInput = container.querySelector('#smax-person-search');
+      const resultsEl = container.querySelector('#smax-person-results');
+      if (searchInput && resultsEl) {
+        const renderResults = (term) => {
+          const q = (term || '').trim().toUpperCase();
+          if (!q) {
+            const preview = Array.from(DataRepository.peopleCache.values()).slice(0, 5).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            resultsEl.innerHTML = preview.map((p) => personOptionTemplate(p)).join('');
+            attachPersonPickHandlers(resultsEl);
+            return;
+          }
+          if (!DataRepository.peopleCache.size) {
+            resultsEl.innerHTML = '<div style="color:#999;">Carregando pessoas do SMAX...</div>';
+            return;
+          }
+          const matches = [];
+          for (const p of DataRepository.peopleCache.values()) {
+            const name = (p.name || '').toUpperCase();
+            const upn = (p.upn || '').toUpperCase();
+            if (name.includes(q) || upn.includes(q)) {
+              matches.push(p);
+              if (matches.length >= 30) break;
+            }
+          }
+          resultsEl.innerHTML = matches.length ? matches.map((p) => personOptionTemplate(p)).join('') : '<div style="color:#999;">Nenhuma pessoa corresponde à busca.</div>';
+          attachPersonPickHandlers(resultsEl);
+        };
+
+        searchInput.addEventListener('input', () => renderResults(searchInput.value));
+        searchInput.addEventListener('focus', () => renderResults(searchInput.value));
+        renderResults('');
+      }
+
+      const selfSelect = container.querySelector('#smax-self-select');
+      if (selfSelect) {
+        selfSelect.addEventListener('change', () => {
+          const selectedOption = selfSelect.options[selfSelect.selectedIndex];
+          if (!selectedOption || !selectedOption.value) {
+            prefs.myPersonId = '';
+            prefs.myPersonName = '';
+            savePrefs();
+            return;
+          }
+          const chosenId = selectedOption.value;
+          const person = DataRepository.peopleCache.get(chosenId) || Array.from(DataRepository.peopleCache.values()).find((p) => String(p.id) === String(chosenId));
+          if (person) {
+            prefs.myPersonId = String(person.id || '').trim();
+            prefs.myPersonName = person.name || '';
+          } else {
+            prefs.myPersonId = chosenId;
+            prefs.myPersonName = selectedOption.dataset.name || selectedOption.textContent || '';
+          }
+          savePrefs();
+        });
+      }
+
+      container.querySelectorAll('.smax-remove-name').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const name = btn.dataset.name;
+          if (!confirm(`Remover ${name} da equipe?`)) return;
+          const groups = prefs.nameGroups || {};
+          delete groups[name];
+          prefs.nameGroups = groups;
+          prefs.ausentes = (prefs.ausentes || []).filter((n) => n !== name);
+          ColorRegistry.remove(name);
+          savePrefs();
+          Distribution.rebuild();
+          RefreshOverlay.show();
+          renderPanel();
+        });
+      });
+
+      container.querySelectorAll('.smax-name-digits').forEach((input) => {
+        input.addEventListener('input', () => {
+          const cleaned = input.value.replace(/[^0-9,\-]/g, '');
+          if (cleaned !== input.value) input.value = cleaned;
+        });
+        input.addEventListener('change', () => {
+          const name = input.dataset.name;
+          const groups = prefs.nameGroups || {};
+          groups[name] = Utils.parseDigitRanges(input.value.trim());
+          prefs.nameGroups = groups;
+          savePrefs();
+          Distribution.rebuild();
+          RefreshOverlay.show();
+        });
+      });
+
+      container.querySelectorAll('.smax-name-absent').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+          const name = checkbox.dataset.name;
+          const ausentes = new Set(prefs.ausentes || []);
+          if (checkbox.checked) ausentes.add(name);
+          else ausentes.delete(name);
+          prefs.ausentes = Array.from(ausentes);
+          savePrefs();
+          Distribution.rebuild();
+          checkbox.closest('div[style*="margin-bottom:10px"]').style.background = checkbox.checked ? '#ffe0e0' : '#f9f9f9';
+          RefreshOverlay.show();
+        });
+      });
+    };
+
+    const personOptionTemplate = (p) => `
+      <div class="smax-person-pick" data-name="${(p.name || '').replace(/"/g, '&quot;')}" style="padding:4px 6px;cursor:pointer;border-radius:3px;">
+        <strong>${p.name}</strong>
+        ${p.upn ? `<span style="color:#555;"> (${p.upn})</span>` : ''}
+        ${p.isVip ? '<span style="margin-left:4px;padding:0 4px;border-radius:999px;background:#facc15;color:#854d0e;font-size:10px;font-weight:700;">VIP</span>' : ''}
+      </div>
+    `;
+
+    const attachPersonPickHandlers = (resultsEl) => {
+      resultsEl.querySelectorAll('.smax-person-pick').forEach((el) => {
+        el.addEventListener('click', () => {
+          const picked = (el.getAttribute('data-name') || '').toUpperCase();
+          if (!picked) return;
+          const groups = prefs.nameGroups || {};
+          if (!groups[picked]) {
+            groups[picked] = [];
+            prefs.nameGroups = groups;
+            savePrefs();
+            Distribution.rebuild();
+            RefreshOverlay.show();
+            renderPanel();
+          }
+        });
+      });
+    };
+
+    const init = () => {
+      if (container) return;
+      toggleBtn = document.createElement('button');
+      toggleBtn.id = 'smax-settings-btn';
+      toggleBtn.textContent = '⚙️';
+      toggleBtn.title = 'Configurações do assistente de triagem';
+      Object.assign(toggleBtn.style, { position: 'fixed', right: '12px', bottom: '12px', zIndex: 999999, border: 'none' });
+      document.body.appendChild(toggleBtn);
+
+      container = document.createElement('div');
+      container.id = 'smax-settings';
+      Object.assign(container.style, {
+        position: 'fixed', right: '12px', bottom: '70px', maxWidth: '650px', maxHeight: '80vh', minHeight: '220px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '8px', background: '#fff', boxShadow: '0 6px 18px rgba(0,0,0,.25)', display: 'none'
+      });
+      document.body.appendChild(container);
+
+      toggleBtn.addEventListener('click', () => {
+        const visible = container.style.display !== 'none';
+        if (!visible) {
+          DataRepository.ensurePeopleLoaded();
+          renderPanel();
+          container.style.display = 'block';
+        } else {
+          container.style.display = 'none';
+        }
+      });
+
+      ensurePeopleWatcher();
+    };
+
+    return { init, renderPanel };
+  })();
+
+  /* =========================================================
+   * Comment auto height
+   * =======================================================*/
+  const CommentExpander = (() => {
+    const init = () => {
+      if (!prefs.enlargeCommentsOn) return;
+      const obs = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (!(node instanceof HTMLElement)) return;
+            if (node.matches('.comment-items')) {
+              node.style.height = 'auto';
+              node.style.maxHeight = 'none';
+            } else {
+              node.querySelectorAll('.comment-items').forEach((el) => {
+                el.style.height = 'auto';
+                el.style.maxHeight = 'none';
+              });
+            }
+          });
+        });
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      window.addEventListener('beforeunload', () => obs.disconnect(), { once: true });
+    };
+    return { init };
+  })();
+
+  /* =========================================================
+   * Section tweaks (collapse catalogue block)
+   * =======================================================*/
+  const SectionTweaks = (() => {
+    const init = () => {
+      if (!prefs.collapseOn) return;
+      const SECTION_SELECTOR = '#form-section-5, [data-aid="section-catalog-offering"]';
+      const IDS_TO_REMOVE = ['form-section-1', 'form-section-7', 'form-section-8'];
+      const collapsedOnce = new WeakSet();
+
+      const isOpen = (section) => {
+        const content = section?.querySelector?.('.pl-entity-page-component-content');
+        return !!content && !content.classList.contains('ng-hide');
+      };
+
+      const fixAria = (header, section) => {
+        if (!header || !section) return;
+        if (header.getAttribute('aria-expanded') !== 'false') header.setAttribute('aria-expanded', 'false');
+        const sr = section.querySelector('.pl-entity-page-component-header-sr');
+        if (sr && /Expandido/i.test(sr.textContent || '')) sr.textContent = sr.textContent.replace(/Expandido/ig, 'Recolhido');
+        const icon = header.querySelector('[pl-bidi-collapse-arrow]') || header.querySelector('.icon-arrow-med-down, .icon-arrow-med-right');
+        if (icon) {
+          icon.classList.remove('icon-arrow-med-down');
+          icon.classList.add('icon-arrow-med-right');
+        }
+      };
+
+      const collapseSectionOnce = (section) => {
+        if (section.dataset.userInteracted === '1') return;
+        if (collapsedOnce.has(section)) return;
+        const header = section.querySelector('.pl-entity-page-component-header[role="button"]');
+        if (!header) return;
+        if (isOpen(section)) {
+          header.click();
+          setTimeout(() => fixAria(header, section), 0);
+        } else {
+          fixAria(header, section);
+        }
+        collapsedOnce.add(section);
+      };
+
+      const removeSections = () => {
+        IDS_TO_REMOVE.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el && el.parentNode) el.remove();
+        });
+      };
+
+      const applyAll = () => {
+        document.querySelectorAll(SECTION_SELECTOR).forEach(collapseSectionOnce);
+        removeSections();
+      };
+
+      document.addEventListener('click', (event) => {
+        const header = event.target.closest('.pl-entity-page-component-header[role="button"]');
+        if (!header) return;
+        const section = header.closest('#form-section-5, [data-aid="section-catalog-offering"]');
+        if (section) section.dataset.userInteracted = '1';
+      }, { capture: true });
+
+      const schedule = Utils.debounce(applyAll, 100);
+      const obs = new MutationObserver(() => schedule());
+      setTimeout(applyAll, 300);
+      obs.observe(document.documentElement, { childList: true, subtree: true });
+      window.addEventListener('beforeunload', () => obs.disconnect(), { once: true });
+    };
+
+    return { init };
+  })();
+
+  /* =========================================================
+   * Orchestrator for repeated UI refresh
+   * =======================================================*/
+  const Orchestrator = (() => {
+    const runAll = () => {
+      if ('requestIdleCallback' in window) requestIdleCallback(NameBadges.apply, { timeout: 500 });
+      else setTimeout(NameBadges.apply, 0);
+    };
+
+    const schedule = Utils.debounce(runAll, 80);
+
+    const init = () => {
+      runAll();
+      const obsMain = new MutationObserver(() => schedule());
+      obsMain.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'aria-expanded']
+      });
+
+      const headerEl = document.querySelector('.slick-header-columns') || document.body;
+      const obsHeader = new MutationObserver(() => schedule());
+      obsHeader.observe(headerEl, { childList: true, subtree: true, attributes: true });
+
+      window.addEventListener('scroll', schedule, true);
+      window.addEventListener('resize', schedule, { passive: true });
+      window.addEventListener('beforeunload', () => { obsMain.disconnect(); obsHeader.disconnect(); }, { once: true });
+    };
+
+    return { init };
+  })();
+
+  /* =========================================================
+   * Skull flag for detractor users
+   * =======================================================*/
+  const SkullFlag = (() => {
+    const normalize = (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    const FLAG_SET = new Set([
+      'Adriano Zilli','Adriana Da Silva Ferreira Oliveira','Alessandra Sousa Nunes','Bruna Marques Dos Santos','Breno Medeiros Malfati','Carlos Henrique Scala De Almeida','Cassia Santos Alves De Lima','Dalete Rodrigues Silva','David Lopes De Oliveira','Davi Dos Reis Garcia','Deaulas De Campos Salviano','Diego Oliveira Da Silva','Diogo Mendonça Aniceto','Elaine Moriya','Ester Naili Dos Santos','Fabiano Barbosa Dos Reis','Fabricio Christiano Tanobe Lyra','Gabriel Teixeira Ludvig','Gilberto Sintoni Junior','Giovanna Coradini Teixeira','Gislene Ferreira Sant\'Ana Ramos','Guilherme Cesar De Sousa','Gustavo De Meira Gonçalves','Jackson Alcantara Santana','Janaina Dos Passos Silvestre','Jefferson Silva De Carvalho Soares','Joyce Da Silva Oliveira','Juan Campos De Souza','Juliana Lino Dos Santos Rosa','Karina Nicolau Samaan','Karine Barbara Vitor De Lima Souza','Kaue Nunes Silva Farrelly','Kelly Ferreira De Freitas','Larissa Ferreira Fumero','Lucas Alves Dos Santos','Lucas Carneiro Peres Ferreira','Marcos Paulo Silva Madalena','Maria Fernanda De Oliveira Bento','Natalia Yurie Shiba','Paulo Roberto Massoca','Pedro Henrique Palacio Baritti','Rafaella Silva Lima Petrolini','Renata Aparecida Mendes Bonvechio','Rodrigo Silva Oliveira','Ryan Souza Carvalho','Tatiana Lourenço Da Costa Antunes','Tatiane Araujo Da Cruz','Thiago Tadeu Faustino De Oliveira','Tiago Carvalho De Freitas Meneses','Victor Viana Roca'
+    ].map(normalize));
+
+    const apply = (personItem) => {
+      try {
+        if (!(personItem instanceof HTMLElement)) return;
+        const clone = personItem.cloneNode(true);
+        while (clone.firstChild) {
+          if (clone.firstChild.nodeType === Node.ELEMENT_NODE) clone.removeChild(clone.firstChild);
+          else break;
+        }
+        const leading = clone.textContent || '';
+        if (!FLAG_SET.has(normalize(leading))) return;
+        const img = personItem.querySelector('img.ts-avatar, img.pl-shared-item-img, img.ts-image') || personItem.querySelector('img');
+        if (img && img.dataset.__g1Applied !== '1') {
+          img.dataset.__g1Applied = '1';
+          img.src = 'https://cdn-icons-png.flaticon.com/512/564/564619.png';
+          img.alt = 'Alerta de Usuário Detrator';
+          img.title = 'Alerta de Usuário Detrator';
+          Object.assign(img.style, { border: '3px solid #ff0000', borderRadius: '50%', padding: '2px', backgroundColor: '#ff000022', boxShadow: '0 0 10px #ff0000' });
+        }
+        personItem.style.color = '#ff0000';
+      } catch {}
+    };
+
+    const init = () => {
+      if (!prefs.flagSkullOn) return;
+      const obs = new MutationObserver(() => document.querySelectorAll('span.pl-person-item').forEach(apply));
+      obs.observe(document.body, { childList: true, subtree: true });
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('span.pl-person-item').forEach(apply));
+      } else {
+        document.querySelectorAll('span.pl-person-item').forEach(apply);
+      }
+      window.addEventListener('beforeunload', () => obs.disconnect(), { once: true });
+    };
+
+    return { init };
+  })();
+
+  /* =========================================================
+   * Grid tracker for triage HUD
+   * =======================================================*/
+  const GridTracker = (() => {
+    let needsRebuild = false;
+
+    const markDirty = () => {
+      needsRebuild = true;
+    };
+
+    const init = () => {
+      try {
+        const viewport = Utils.getGridViewport();
+        if (!viewport) return;
+        let lastCount = viewport.querySelectorAll('.slick-row').length;
+        const obs = new MutationObserver(() => {
+          const currentCount = viewport.querySelectorAll('.slick-row').length;
+          if (currentCount !== lastCount) {
+            lastCount = currentCount;
+            markDirty();
+          }
+        });
+        obs.observe(viewport, { childList: true, subtree: true });
+        window.addEventListener('beforeunload', () => obs.disconnect(), { once: true });
+      } catch (err) {
+        console.warn('[SMAX] Failed to observe grid changes:', err);
+      }
+    };
+
+    const consume = () => {
+      const flag = needsRebuild;
+      needsRebuild = false;
+      return flag;
+    };
+
+    DataRepository.onQueueUpdate(markDirty);
+
+    return { init, consume, markDirty };
+  })();
+
+  /* =========================================================
+   * Triage HUD
+   * =======================================================*/
+  const TriageHUD = (() => {
+    const quickReplyCompletionCode = 'CompletionCodeFulfilled';
+    let startBtn;
+    let backdrop;
+    let triageQueue = [];
+    let triageIndex = -1;
+    const stagedState = { urgency: null, assign: false, parentId: '', parentSelected: false };
+    let quickReplyHtml = '';
+    let quickReplyEditor = null;
+    let quickReplyEditorAttempts = 0;
+    let quickReplyEditorConfig = null;
+    let globalCkSnapshot = null;
+    let nativeWatcherArmed = false;
+    let quickReplyFallbackNotified = false;
+    let quickReplyEditorPollTimer = null;
+    let activeTicketId = null;
+    let editorBaselineHtml = '';
+    let quickReplyDirtyState = false;
+    let baselineSyncTimer = null;
+    let currentOwnerName = '';
+    let personalFinalsSet = new Set(Utils.parseDigitRanges(prefs.personalFinalsRaw || ''));
+    let attachmentsFetchSeq = 0;
+    let currentAttachmentList = [];
+    const inlineAttachmentHints = new Map();
+
+    DataRepository.onQueueUpdate(() => inlineAttachmentHints.clear());
+
+    const parseHtmlForAttachmentRefs = (html, hints) => {
+      if (!html || !hints) return;
+      const container = document.createElement('div');
+      container.innerHTML = String(html);
+      const nodes = container.querySelectorAll('[src],[href]');
+      nodes.forEach((node) => {
+        const raw = node.getAttribute('src') || node.getAttribute('href');
+        if (!raw) return;
+        const absolute = raw.startsWith('http') ? raw : Utils.toAbsoluteUrl(raw);
+        const ids = new Set();
+        const directMatch = absolute.match(/Attachment(?:%3A|:|\/)([a-z0-9-]{6,})/i);
+        if (directMatch) ids.add(directMatch[1]);
+        try {
+          const parsed = new URL(absolute, window.location.origin);
+          const param = parsed.searchParams.get('attachmentId');
+          if (param) ids.add(param.replace(/^Attachment:/i, ''));
+        } catch {}
+        ids.forEach((rawId) => {
+          const clean = Utils.normalizeAttachmentId(rawId);
+          if (!clean) return;
+          hints.ids.add(clean);
+          if (!hints.urlById.has(clean)) hints.urlById.set(clean, absolute);
+        });
+      });
+    };
+
+    const getInlineAttachmentHints = (requestId) => {
+      const normalized = Utils.normalizeRequestId(requestId);
+      if (!normalized) return { ids: new Set(), urlById: new Map() };
+      if (inlineAttachmentHints.has(normalized)) return inlineAttachmentHints.get(normalized);
+      const hints = { ids: new Set(), urlById: new Map() };
+      const cache = DataRepository.triageCache;
+      if (cache && cache.has(normalized)) {
+        const entry = cache.get(normalized) || {};
+        parseHtmlForAttachmentRefs(entry.descriptionHtml, hints);
+        parseHtmlForAttachmentRefs(entry.solutionHtml, hints);
+        if (Array.isArray(entry.discussions)) entry.discussions.forEach((disc) => parseHtmlForAttachmentRefs(disc && disc.bodyHtml, hints));
+      }
+      inlineAttachmentHints.set(normalized, hints);
+      return hints;
+    };
+
+    const applyInlineAttachmentFilter = (list, requestId) => {
+      if (!Array.isArray(list)) return { filtered: [], removed: 0 };
+      const hints = getInlineAttachmentHints(requestId);
+      if (!hints.ids.size) return { filtered: list, removed: 0 };
+      const filtered = list.filter((item) => !hints.ids.has(Utils.normalizeAttachmentId(item.id)));
+      return { filtered, removed: list.length - filtered.length };
+    };
+
+    const urgencyMap = {
+      low: { Urgency: 'NoDisruption', ImpactScope: 'SingleUser' },
+      med: { Urgency: 'SlightDisruption', ImpactScope: 'SiteOrDepartment' },
+      high: { Urgency: 'TotalLossOfService', ImpactScope: 'SiteOrDepartment' },
+      crit: { Urgency: 'TotalLossOfService', ImpactScope: 'Enterprise' }
+    };
+
+    const getQuickReplyField = () => (backdrop ? backdrop.querySelector('#smax-triage-quickreply-editor') : null);
+
+    const setQuickReplyHtml = (html, { syncBaseline = false } = {}) => {
+      quickReplyHtml = html || '';
+      if (quickReplyEditor && typeof quickReplyEditor.setData === 'function') {
+        try {
+          quickReplyEditor.setData(quickReplyHtml);
+        } catch (err) {
+          console.warn('[SMAX] Falha ao atualizar o CKEditor da resposta rápida:', err);
+        }
+      } else {
+        const field = getQuickReplyField();
+        if (field) field.value = quickReplyHtml;
+      }
+      if (syncBaseline) {
+        editorBaselineHtml = normalizeHtml(quickReplyHtml);
+        updateQuickReplyStageState();
+      } else {
+        syncBaselineFromEditor({ immediate: !quickReplyEditor });
+      }
+    };
+
+    const readQuickReplyHtml = () => {
+      if (quickReplyEditor && typeof quickReplyEditor.getData === 'function') {
+        return quickReplyEditor.getData();
+      }
+      const field = getQuickReplyField();
+      return field ? field.value : '';
+    };
+
+    const normalizeHtml = (html) => (html || '')
+      .replace(/\r/g, '')
+      .replace(/\u00a0/gi, ' ')
+      .trim();
+
+    const clearQuickReplyState = () => {
+      setQuickReplyHtml('', { syncBaseline: true });
+    };
+
+    const syncQuickReplyBaseline = (html) => {
+      const safe = html != null ? String(html) : '';
+      setQuickReplyHtml(safe, { syncBaseline: true });
+    };
+
+    const hasUnsavedSolution = () => normalizeHtml(readQuickReplyHtml()) !== editorBaselineHtml;
+
+    const syncBaselineFromEditor = ({ immediate = false } = {}) => {
+      if (baselineSyncTimer) clearTimeout(baselineSyncTimer);
+      const apply = () => {
+        baselineSyncTimer = null;
+        editorBaselineHtml = normalizeHtml(readQuickReplyHtml());
+        updateQuickReplyStageState();
+      };
+      if (immediate || !quickReplyEditor) {
+        apply();
+        return;
+      }
+      baselineSyncTimer = setTimeout(apply, 80);
+    };
+
+    const updateQuickReplyStageState = ({ announce = false } = {}) => {
+      const staged = hasUnsavedSolution();
+      if (backdrop) {
+        const card = backdrop.querySelector('#smax-triage-quickreply-card');
+        if (card) card.dataset.staged = staged ? 'true' : 'false';
+      }
+      if (backdrop && announce && staged && !quickReplyDirtyState) {
+        setStatus('Resposta pronta. Use ENVIAR para gravá-la no chamado.', 3500);
+      }
+      quickReplyDirtyState = staged;
+      if (backdrop) {
+        refreshButtons();
+        setBaselineStatus();
+      }
+    };
+
+    const handleQuickReplyChange = (nextHtml) => {
+      quickReplyHtml = nextHtml != null ? nextHtml : readQuickReplyHtml();
+      updateQuickReplyStageState({ announce: true });
+    };
+
+    const setQuickGuideVisible = (visible) => {
+      if (!backdrop) return;
+      const panel = backdrop.querySelector('#smax-quick-guide-panel');
+      if (!panel) return;
+      panel.style.display = visible ? 'block' : 'none';
+      panel.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    };
+
+    const toggleQuickGuide = () => {
+      if (!backdrop) return;
+      const panel = backdrop.querySelector('#smax-quick-guide-panel');
+      if (!panel) return;
+      const next = panel.style.display !== 'block';
+      setQuickGuideVisible(next);
+    };
+
+    const hideQuickGuide = () => setQuickGuideVisible(false);
+
+    const refreshPersonalFinalsSet = () => {
+      personalFinalsSet = new Set(Utils.parseDigitRanges(prefs.personalFinalsRaw || ''));
+    };
+
+    const updateAttachmentPanel = ({ state, items = [], message } = {}) => {
+      if (!backdrop) return;
+      const listEl = backdrop.querySelector('#smax-triage-attachment-list');
+      const row = backdrop.querySelector('#smax-triage-status-row');
+      if (!listEl) return;
+      if (state === 'loading') {
+        currentAttachmentList = [];
+        listEl.dataset.state = 'loading';
+        listEl.textContent = 'Carregando anexos...';
+        if (row) row.dataset.empty = 'true';
+        return;
+      }
+      if (state === 'error') {
+        currentAttachmentList = [];
+        listEl.dataset.state = 'error';
+        listEl.textContent = 'Não consegui carregar os anexos deste chamado.';
+        if (row) row.dataset.empty = 'true';
+        return;
+      }
+      if (!items.length) {
+        currentAttachmentList = [];
+        listEl.dataset.state = 'empty';
+        listEl.textContent = message || 'Sem anexos.';
+        if (row) row.dataset.empty = 'true';
+        return;
+      }
+      currentAttachmentList = items;
+      listEl.dataset.state = 'ready';
+      listEl.innerHTML = items.map((att) => `
+        <button type="button" class="smax-attachment-chip" data-attachment-id="${Utils.escapeHtml(att.id)}" title="${Utils.escapeHtml(att.name)}">
+          ${Utils.escapeHtml(att.name)}
+        </button>
+      `).join('');
+      if (row) row.dataset.empty = 'false';
+    };
+
+    const fetchAttachmentsForRequest = (requestId) => {
+      attachmentsFetchSeq += 1;
+      const token = attachmentsFetchSeq;
+      const normalized = Utils.normalizeRequestId(requestId);
+      if (!normalized) {
+        updateAttachmentPanel({ state: 'empty', items: [] });
+        return;
+      }
+      updateAttachmentPanel({ state: 'loading' });
+      AttachmentService.fetchList(normalized).then((list) => {
+        if (token !== attachmentsFetchSeq) return;
+        const { filtered, removed } = applyInlineAttachmentFilter(list, normalized);
+        if (removed && !filtered.length) {
+          updateAttachmentPanel({
+            state: 'empty',
+            items: [],
+            message: 'Apenas imagens já embutidas na descrição/discussões.'
+          });
+          return;
+        }
+        updateAttachmentPanel({ state: 'ready', items: filtered });
+      }).catch(() => {
+        if (token !== attachmentsFetchSeq) return;
+        updateAttachmentPanel({ state: 'error' });
+      });
+    };
+
+    const finalPairFromEntry = (entry) => {
+      if (!entry) return null;
+      if (typeof entry.idNum === 'number' && !Number.isNaN(entry.idNum)) {
+        return ((Math.abs(entry.idNum) % 100) + 100) % 100;
+      }
+      const trailing = Utils.extractTrailingDigits(entry.idText || '') || '';
+      if (!trailing) return null;
+      const slice = trailing.slice(-2);
+      if (!slice) return null;
+      const parsed = parseInt(slice, 10);
+      if (Number.isNaN(parsed)) return null;
+      return ((Math.abs(parsed) % 100) + 100) % 100;
+    };
+
+    const matchesPersonalFinals = (entry) => {
+      if (!personalFinalsSet.size) return true;
+      const target = finalPairFromEntry(entry);
+      return target != null && personalFinalsSet.has(target);
+    };
+
+    const applyPersonalFinalsFilter = (queue) => {
+      if (!personalFinalsSet.size || !Array.isArray(queue)) return queue;
+      return queue.filter((entry) => matchesPersonalFinals(entry));
+    };
+
+    const deepClone = (value) => {
+      if (Array.isArray(value)) return value.map((item) => deepClone(item));
+      if (value && typeof value === 'object') {
+        return Object.entries(value).reduce((acc, [key, val]) => {
+          acc[key] = deepClone(val);
+          return acc;
+        }, {});
+      }
+      return value;
+    };
+
+    const ensureSourceButton = (toolbar) => {
+      if (!Array.isArray(toolbar)) return;
+      const hasSource = toolbar.some((group) => {
+        if (!group) return false;
+        if (typeof group === 'string') return group === 'Source';
+        if (Array.isArray(group)) return group.includes('Source');
+        const items = Array.isArray(group.items) ? group.items : null;
+        return items ? items.includes('Source') : false;
+      });
+      if (hasSource) return;
+      if (toolbar.length) {
+        const first = toolbar[0];
+        if (typeof first === 'string') toolbar.unshift('Source');
+        else if (Array.isArray(first)) first.unshift('Source');
+        else if (first && Array.isArray(first.items)) first.items.unshift('Source');
+        else toolbar.unshift({ name: 'document', items: ['Source'] });
+      } else {
+        toolbar.push({ name: 'document', items: ['Source'] });
+      }
+    };
+
+    const defaultQuickReplyConfig = () => ({
+      height: 180,
+      allowedContent: true,
+      removePlugins: 'elementspath',
+      extraPlugins: 'colorbutton,font',
+      toolbar: [
+        { name: 'document', items: ['Source', 'Preview'] },
+        { name: 'clipboard', items: ['Undo', 'Redo'] },
+        { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline', 'Strike', 'RemoveFormat'] },
+        { name: 'paragraph', items: ['NumberedList', 'BulletedList', '-', 'Outdent', 'Indent'] },
+        { name: 'links', items: ['Link', 'Unlink'] },
+        { name: 'insert', items: ['Table', 'HorizontalRule'] },
+        { name: 'styles', items: ['Format', 'Font', 'FontSize'] },
+        { name: 'colors', items: ['TextColor', 'BGColor'] }
+      ]
+    });
+
+    const copyConfigKeys = (source) => {
+      if (!source) return null;
+      const cfg = {
+        height: source.height || 180,
+        allowedContent: source.allowedContent !== undefined ? source.allowedContent : true,
+        removePlugins: source.removePlugins || 'elementspath',
+        extraPlugins: source.extraPlugins || ''
+      };
+      const keys = [
+        'toolbar', 'toolbarGroups', 'font_names', 'fontSize_sizes', 'format_tags', 'contentsCss',
+        'skin', 'uiColor', 'colorButton_foreStyle', 'colorButton_backStyle', 'stylesSet',
+        'enterMode', 'shiftEnterMode', 'removeButtons'
+      ];
+      keys.forEach((key) => {
+        if (source[key] !== undefined) cfg[key] = deepClone(source[key]);
+      });
+      if (cfg.toolbar) ensureSourceButton(cfg.toolbar);
+      return cfg;
+    };
+
+    const appendEditorCss = (config, cssText) => {
+      if (!config || !cssText) return;
+      const dataUri = `data:text/css,${encodeURIComponent(cssText)}`;
+      if (Array.isArray(config.contentsCss)) {
+        config.contentsCss.push(dataUri);
+      } else if (typeof config.contentsCss === 'string' && config.contentsCss.length) {
+        config.contentsCss = [config.contentsCss, dataUri];
+      } else {
+        config.contentsCss = [dataUri];
+      }
+    };
+
+    const pickAnyEditorInstance = () => {
+      const ck = getPageCKEditor();
+      if (!(ck && ck.instances)) return null;
+      const list = Object.values(ck.instances);
+      if (!list.length) return null;
+      const target = list.find((inst) => {
+        try {
+          const id = `${inst.name || ''} ${inst.element && inst.element.getName ? inst.element.getName() : ''}`;
+          return /solution|solucao|plCkeditor/i.test(id);
+        } catch {
+          return false;
+        }
+      });
+      return target || list[0];
+    };
+
+    const captureGlobalConfigSnapshot = () => {
+      const ck = getPageCKEditor();
+      if (globalCkSnapshot || !(ck && ck.config)) return globalCkSnapshot;
+      try {
+        globalCkSnapshot = copyConfigKeys(ck.config) || null;
+      } catch (err) {
+        console.warn('[SMAX] Failed to snapshot global CKEditor config:', err);
+        globalCkSnapshot = null;
+      }
+      return globalCkSnapshot;
+    };
+
+    const captureQuickReplyConfig = () => {
+      if (quickReplyEditorConfig) return quickReplyEditorConfig;
+      const ck = getPageCKEditor();
+      if (ck && ck.instances) {
+        const native = (Utils.locateSolutionEditor && Utils.locateSolutionEditor()) || pickAnyEditorInstance();
+        if (native && native.config) {
+          quickReplyEditorConfig = copyConfigKeys(native.config);
+          if (quickReplyEditorConfig) {
+            quickReplyFallbackNotified = false;
+            return quickReplyEditorConfig;
+          }
+        }
+      }
+      quickReplyEditorConfig = captureGlobalConfigSnapshot();
+      if (quickReplyEditorConfig && !quickReplyFallbackNotified) {
+        quickReplyFallbackNotified = true;
+        console.warn('[SMAX] CKEditor nativo ainda não foi aberto; usando configuração global detectada.');
+      }
+      return quickReplyEditorConfig;
+    };
+
+    const hookNativeEditors = () => {
+      if (nativeWatcherArmed) return;
+      nativeWatcherArmed = true;
+      console.info('[SMAX] Aguardando o CKEditor nativo para copiar a configuração...');
+      const attempt = () => {
+        const ck = getPageCKEditor();
+        if (!(ck && ck.on)) {
+          setTimeout(attempt, 800);
+          return;
+        }
+        const tryCapture = (editor) => {
+          if (!editor || !editor.config) return;
+          const cfg = copyConfigKeys(editor.config);
+          if (cfg) {
+            quickReplyEditorConfig = cfg;
+            quickReplyFallbackNotified = false;
+            console.info('[SMAX] Configuração do CKEditor clonada para a resposta rápida.');
+            if (!quickReplyEditor) ensureQuickReplyEditor();
+          }
+        };
+        Object.values(ck.instances || {}).forEach(tryCapture);
+        ck.on('instanceReady', (evt) => {
+          tryCapture(evt && evt.editor);
+        });
+      };
+      attempt();
+    };
+
+    const buildQuickReplyConfig = () => {
+      const captured = captureQuickReplyConfig();
+      if (captured) return deepClone(captured);
+      const fallback = defaultQuickReplyConfig();
+      ensureSourceButton(fallback.toolbar);
+      if (!quickReplyFallbackNotified) {
+        quickReplyFallbackNotified = true;
+        console.warn('[SMAX] CKEditor nativo não detectado; usando configuração padrão na resposta rápida.');
+      }
+      return fallback;
+    };
+
+    const ensureQuickReplyEditor = () => {
+      const ck = getPageCKEditor();
+      if (!ck || !ck.replace || quickReplyEditor) return;
+      const field = getQuickReplyField();
+      if (!field) return;
+      const config = buildQuickReplyConfig();
+      if (!config) return;
+      try {
+        console.info('[SMAX] Inicializando editor de resposta rápida.');
+        const instanceConfig = Object.assign({ resize_enabled: true }, config);
+        appendEditorCss(instanceConfig, 'body{color:#000000 !important;}');
+        quickReplyEditor = ck.replace(field, instanceConfig);
+        const enforceDefaultColor = () => {
+          try {
+            if (!quickReplyEditor) return;
+            const editable = typeof quickReplyEditor.editable === 'function' ? quickReplyEditor.editable() : null;
+            if (editable && typeof editable.setStyle === 'function') {
+              editable.setStyle('color', '#000000');
+              editable.removeClass('smax-quickreply-muted');
+            }
+          } catch (err) {
+            console.warn('[SMAX] Failed to enforce default CKEditor text color:', err);
+          }
+        };
+        quickReplyEditor.on('instanceReady', () => {
+          enforceDefaultColor();
+          quickReplyEditor.setData(quickReplyHtml || '');
+          setTimeout(() => syncBaselineFromEditor({ immediate: true }), 60);
+          console.info('[SMAX] Editor de resposta rápida pronto e sincronizado.');
+        });
+        quickReplyEditor.on('contentDom', enforceDefaultColor);
+        quickReplyEditor.on('change', () => {
+          handleQuickReplyChange(quickReplyEditor.getData());
+        });
+      } catch (err) {
+        console.warn('[SMAX] Failed to init quick reply editor:', err);
+        console.error('[SMAX] Não consegui carregar o CKEditor no painel de resposta rápida.');
+      }
+    };
+
+    const scheduleQuickReplyEditor = () => {
+      if (quickReplyEditor) return;
+      if (quickReplyEditorPollTimer) clearTimeout(quickReplyEditorPollTimer);
+      quickReplyEditorAttempts += 1;
+      const ck = getPageCKEditor();
+      const ckReady = Boolean(ck && ck.replace);
+      if (ckReady) {
+        ensureQuickReplyEditor();
+      } else {
+        if (quickReplyEditorAttempts === 1) {
+          console.info('[SMAX] Carregando scripts do CKEditor para a resposta rápida...');
+        }
+      }
+      if (!quickReplyEditor) {
+        const delay = Math.min(1200, 600 + quickReplyEditorAttempts * 40);
+        quickReplyEditorPollTimer = setTimeout(scheduleQuickReplyEditor, delay);
+      } else {
+        quickReplyEditorPollTimer = null;
+      }
+    };
+
+    const captureSelectedIdFromDom = () => {
+      try {
+        const viewport = Utils.getGridViewport();
+        if (!viewport) return null;
+        const row = viewport.querySelector('.slick-row.active, .slick-row.ui-state-active, .slick-row.selected');
+        if (!row) return null;
+        const anchor = row.querySelector('a.entity-link-id, a');
+        if (anchor) return (anchor.textContent || '').trim();
+        const cell = row.querySelector('.slick-cell');
+        return cell ? (cell.textContent || '').trim() : null;
+      } catch (err) {
+        console.warn('[SMAX] Failed to capture selected row id:', err);
+        return null;
+      }
+    };
+
+    const buildQueue = () => {
+      const snapshot = DataRepository.getTriageQueueSnapshot();
+      const selectedFromDom = captureSelectedIdFromDom();
+      if (snapshot.length) {
+        return { list: applyPersonalFinalsFilter(snapshot.slice()), selectedId: selectedFromDom };
+      }
+      const viewport = Utils.getGridViewport();
+      if (!viewport) return [];
+      let idColIndex = 0;
+      let createTimeColIndex = null;
+      try {
+        const headerColumns = document.querySelectorAll('.slick-header-column');
+        headerColumns.forEach((col, idx) => {
+          const aid = col.getAttribute('data-aid') || '';
+          if (/grid_header_Id$/i.test(aid)) idColIndex = idx;
+          if (/grid_header_CreateTime$/i.test(aid)) createTimeColIndex = idx;
+        });
+      } catch {}
+
+      const rows = Array.from(viewport.querySelectorAll('.slick-row'));
+      const queue = [];
+      let selectedId = null;
+      for (const row of rows) {
+        const cells = row.querySelectorAll('.slick-cell');
+        if (!cells.length) continue;
+        const idCell = cells[idColIndex] || cells[0];
+        const idText = (idCell.textContent || '').trim();
+        const idNum = parseInt(idText.replace(/\D/g, ''), 10);
+        if (!idText) continue;
+        if (!selectedId && row.classList.contains('active')) selectedId = idText;
+        else if (!selectedId && row.classList.contains('ui-state-active')) selectedId = idText;
+        else if (!selectedId && row.classList.contains('selected')) selectedId = idText;
+        let createdCell = null;
+        if (createTimeColIndex != null && cells[createTimeColIndex]) {
+          createdCell = cells[createTimeColIndex];
+        } else {
+          createdCell = Array.from(cells).find((c) => /Hora de Cria/i.test(c.getAttribute('title') || '') || /Hora de Cria/i.test(c.textContent || ''));
+        }
+        const createdText = createdCell ? (createdCell.textContent || '').trim() : '';
+        const createdTs = Utils.parseSmaxDateTime(createdText) || 0;
+        const vipCell = Array.from(cells).find((c) => /VIP/i.test(c.textContent || ''));
+        const isVip = !!vipCell && /VIP/i.test(vipCell.textContent || '');
+        queue.push({ idText, idNum: Number.isNaN(idNum) ? null : idNum, createdText, createdTs, isVip });
+      }
+      queue.sort((a, b) => {
+        if (a.isVip !== b.isVip) return a.isVip ? -1 : 1;
+        if (a.createdTs !== b.createdTs) return a.createdTs - b.createdTs;
+        if (a.idNum != null && b.idNum != null && a.idNum !== b.idNum) return a.idNum - b.idNum;
+        return 0;
+      });
+      return { list: applyPersonalFinalsFilter(queue), selectedId: selectedId || selectedFromDom || null };
+    };
+
+    const currentItem = () => {
+      if (!triageQueue.length) return null;
+      if (triageIndex < 0 || triageIndex >= triageQueue.length) return triageQueue[0];
+      return triageQueue[triageIndex];
+    };
+
+    const rebuildQueueForPersonalFinals = () => {
+      if (!backdrop || backdrop.style.display !== 'flex') return;
+      const currentId = currentItem()?.idText || null;
+      const { list } = buildQueue();
+      triageQueue = list;
+      if (!triageQueue.length) {
+        triageIndex = -1;
+      } else if (currentId) {
+        const idx = triageQueue.findIndex((entry) => entry.idText === currentId);
+        triageIndex = idx >= 0 ? idx : 0;
+      } else {
+        triageIndex = 0;
+      }
+      render();
+    };
+
+    const resetStaged = () => {
+      stagedState.urgency = null;
+      stagedState.assign = false;
+      stagedState.parentId = '';
+      stagedState.parentSelected = false;
+    };
+
+    const anyStaged = () => Boolean(stagedState.urgency || stagedState.assign || stagedState.parentSelected || hasUnsavedSolution());
+
+    const ownerForCurrent = () => {
+      const item = currentItem();
+      if (!item) return null;
+      return Distribution.ownerForDigits(item.idText) || Distribution.ownerForDigits(item.idNum != null ? String(item.idNum) : '');
+    };
+
+    const formatBrazilianDateTime = (ts, fallbackText) => {
+      const options = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+      if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+        try {
+          return new Date(ts).toLocaleString('pt-BR', options);
+        } catch {}
+      }
+      const parsed = Utils.parseSmaxDateTime(fallbackText || '');
+      if (parsed) {
+        try {
+          return new Date(parsed).toLocaleString('pt-BR', options);
+        } catch {}
+      }
+      return fallbackText || 'Faltando na visão';
+    };
+
+    const formatDiscussionTimestamp = (ts, fallbackText) => {
+      const options = {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      };
+      if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+        try {
+          return new Date(ts).toLocaleString('pt-BR', options);
+        } catch {}
+      }
+      const parsed = Utils.parseSmaxDateTime(fallbackText || '');
+      if (parsed) {
+        try {
+          return new Date(parsed).toLocaleString('pt-BR', options);
+        } catch {}
+      }
+      return fallbackText || 'Data desconhecida';
+    };
+
+    const resolveSubmitterName = (entry) => {
+      if (!entry) return '';
+      if (entry.submitterDisplay) return entry.submitterDisplay;
+      if (entry.submitterPersonId && DataRepository.peopleCache.has(entry.submitterPersonId)) {
+        const person = DataRepository.peopleCache.get(entry.submitterPersonId);
+        if (person && person.name) return person.name;
+      }
+      return '';
+    };
+
+    const buildDiscussionListMarkup = (entries) => {
+      if (!Array.isArray(entries) || !entries.length) {
+        return '<div class="smax-discussions-placeholder">Nenhuma discussão registrada neste chamado.</div>';
+      }
+      return entries.map((entry) => {
+        const title = Utils.escapeHtml(entry.purposeLabel || 'Discussão');
+        const privacy = Utils.escapeHtml(entry.privacyCode || '');
+        const privacyLabel = Utils.escapeHtml(entry.privacyLabel || 'Interno');
+        const bodyHtml = entry.bodyHtml || '<div style="color:#94a3b8;">(Sem conteúdo)</div>';
+        const timestamp = formatDiscussionTimestamp(entry.createdTs, entry.createdRaw);
+        const name = resolveSubmitterName(entry);
+        const author = entry.systemGenerated
+          ? 'Gerado automaticamente'
+          : (name
+            ? `Registrado por ${Utils.escapeHtml(name)}`
+            : (entry.submitterDisplay ? `Registrado por ${Utils.escapeHtml(entry.submitterDisplay)}` : 'Registro manual'));
+        return `
+          <article class="smax-discussion-card" data-privacy="${privacy}">
+            <div class="smax-discussion-heading">
+              <span class="smax-discussion-title">${title}</span>
+              <span class="smax-discussion-privacy">${privacyLabel}</span>
+            </div>
+            <div class="smax-discussion-body">${bodyHtml}</div>
+            <div class="smax-discussion-meta">${author} | ${timestamp}</div>
+          </article>
+        `;
+      }).join('');
+    };
+
+    const render = () => {
+      if (!backdrop) return;
+      const ticketDetailsEl = backdrop.querySelector('#smax-triage-ticket-details');
+      const discussionsEl = backdrop.querySelector('#smax-triage-discussions');
+      const statusEl = backdrop.querySelector('#smax-triage-status');
+      const prevBtn = backdrop.querySelector('#smax-triage-prev');
+      const nextBtn = backdrop.querySelector('#smax-triage-next');
+      const commitBtn = backdrop.querySelector('#smax-triage-commit');
+      const inputGlobal = backdrop.querySelector('#smax-triage-global-id');
+      const globalHint = backdrop.querySelector('#smax-triage-global-hint');
+      const urgencyButtons = {
+        low: backdrop.querySelector('#smax-triage-urg-low'),
+        med: backdrop.querySelector('#smax-triage-urg-med'),
+        high: backdrop.querySelector('#smax-triage-urg-high'),
+        crit: backdrop.querySelector('#smax-triage-urg-crit')
+      };
+      const assignPanel = backdrop.querySelector('#smax-triage-assign-panel');
+      const assignValue = backdrop.querySelector('#smax-triage-assign-value');
+
+      if (!triageQueue.length) {
+        triageIndex = -1;
+        if (ticketDetailsEl) ticketDetailsEl.innerHTML = '<div style="font-size:14px;color:#e5e7eb;">Nenhum chamado encontrado na lista atual. Verifique o campo "meus finais", logo acima.</div>';
+        if (discussionsEl) discussionsEl.innerHTML = '<div class="smax-discussions-placeholder">Nenhuma discussão disponível.</div>';
+        statusEl.textContent = personalFinalsSet.size
+          ? 'Nenhum chamado corresponde aos finais configurados.'
+          : 'Verifique se a visão contém ID, Descrição e Hora de Criação.';
+        if (nextBtn) nextBtn.disabled = true;
+        if (prevBtn) prevBtn.disabled = true;
+        Object.values(urgencyButtons).forEach((btn) => { btn.disabled = true; btn.dataset.active = 'false'; });
+        currentOwnerName = '';
+        stagedState.assign = false;
+        stagedState.parentId = '';
+        stagedState.parentSelected = false;
+        if (assignPanel) {
+          assignPanel.dataset.state = 'disabled';
+          if (assignValue) assignValue.textContent = 'Sem dono configurado';
+        }
+        if (inputGlobal) inputGlobal.value = '';
+        if (inputGlobal) inputGlobal.dataset.state = 'inactive';
+        if (globalHint) {
+          globalHint.dataset.state = 'inactive';
+          globalHint.textContent = 'Sem vínculo global';
+        }
+        commitBtn.disabled = true;
+        activeTicketId = null;
+        clearQuickReplyState();
+        updateAttachmentPanel({ state: 'empty', items: [] });
+        return;
+      }
+
+      if (nextBtn) nextBtn.disabled = false;
+      if (prevBtn) prevBtn.disabled = false;
+      const item = currentItem();
+      activeTicketId = item ? item.idText : null;
+      const pendingRequestId = activeTicketId;
+      resetStaged();
+      if (inputGlobal) {
+        inputGlobal.value = '';
+        inputGlobal.dataset.state = 'inactive';
+      }
+      if (globalHint) {
+        globalHint.dataset.state = 'inactive';
+        globalHint.textContent = 'Sem vínculo global';
+      }
+      clearQuickReplyState();
+      setStatus('Carregando solução do chamado selecionado...', 3000);
+      updateAttachmentPanel({ state: 'loading' });
+
+      if (ticketDetailsEl) {
+        ticketDetailsEl.innerHTML = `
+          <div style="font-size:14px;color:#e5e7eb;">
+            Carregando detalhes completos do chamado ${item.idText || '-'}...
+          </div>
+        `;
+      }
+      if (discussionsEl) {
+        discussionsEl.innerHTML = '<div class="smax-discussions-placeholder">Carregando discussões deste chamado...</div>';
+      }
+
+      DataRepository.ensureRequestPayload(pendingRequestId, { force: true }).then((full) => {
+        if (!pendingRequestId || activeTicketId !== pendingRequestId) return;
+        if (!full) {
+          if (ticketDetailsEl) {
+            ticketDetailsEl.innerHTML = `
+              <div style="font-size:14px;color:#fecaca;">
+                Não foi possível carregar os detalhes completos deste chamado.
+              </div>
+            `;
+          }
+          if (discussionsEl) {
+            discussionsEl.innerHTML = '<div class="smax-discussions-placeholder">Não consegui carregar as discussões deste chamado.</div>';
+          }
+          setStatus('Não consegui carregar a solução deste chamado.', 4000);
+          updateAttachmentPanel({ state: 'error' });
+          return;
+        }
+        const missing = [];
+        if (!full.idText) missing.push('ID');
+        if (!full.descriptionText && !full.subjectText) missing.push('Descrição');
+        if (!full.createdText) missing.push('Hora de Criação');
+        const warning = missing.length
+          ? `<div style="margin-bottom:6px;padding:6px 8px;border-radius:6px;background:#7f1d1d;color:#fee2e2;font-size:12px;">
+               Aviso: faltam ${missing.join(', ')} na visão atual.
+             </div>`
+          : '';
+        const vipBadge = full.isVip ? '<span style="margin-left:8px;padding:2px 6px;border-radius:999px;background:#facc15;color:#854d0e;font-size:11px;font-weight:700;">VIP</span>' : '';
+        const requestedForHtml = full.requestedForName
+          ? `<div><strong>Solicitado para</strong> ${Utils.escapeHtml(full.requestedForName)}</div>`
+          : '';
+        if (!ticketDetailsEl) return;
+        const createdDisplay = formatBrazilianDateTime(full.createdTs, full.createdText);
+        const descHtml = Utils.sanitizeRichText(full.descriptionHtml || full.descriptionText || full.subjectText || '');
+        const descDisplay = descHtml || `<div style="color:#94a3b8;">(Sem descrição disponível. Confira a coluna Descrição.)</div>`;
+        const idLink = full.idText
+          ? `<a href="https://suporte.tjsp.jus.br/saw/Request/${encodeURIComponent(full.idText)}/general" target="_blank" rel="noreferrer noopener" style="color:#38bdf8;text-decoration:none;">${full.idText}</a>`
+          : '-';
+        ticketDetailsEl.innerHTML = `
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:14px;">
+            ${warning}
+            <div class="smax-triage-meta-row">
+              <div><strong>ID</strong> ${idLink}${vipBadge ? ` ${vipBadge}` : ''}</div>
+              <div><strong>Hora de criação</strong> ${createdDisplay}</div>
+              ${requestedForHtml}
+            </div>
+            <div class="smax-triage-desc">${descDisplay}</div>
+          </div>
+        `;
+
+        if (discussionsEl) {
+          discussionsEl.innerHTML = buildDiscussionListMarkup(Array.isArray(full.discussions) ? full.discussions : []);
+        }
+
+        const solutionHtml = full.solutionHtml != null ? full.solutionHtml : '';
+        syncQuickReplyBaseline(solutionHtml);
+        if (solutionHtml) setStatus('Solução atual carregada deste chamado.', 2500);
+        else setBaselineStatus();
+
+        fetchAttachmentsForRequest(pendingRequestId);
+      });
+
+      Object.entries(urgencyButtons).forEach(([key, btn]) => {
+        btn.disabled = false;
+        btn.dataset.active = 'false';
+        btn.onclick = () => toggleUrgency(key);
+      });
+
+      const owner = ownerForCurrent();
+      currentOwnerName = owner || '';
+
+      if (inputGlobal && !inputGlobal.dataset.wired) {
+        inputGlobal.dataset.wired = '1';
+        inputGlobal.addEventListener('input', () => {
+          const cleaned = inputGlobal.value.replace(/\D/g, '');
+          if (cleaned !== inputGlobal.value) inputGlobal.value = cleaned;
+          stagedState.parentId = inputGlobal.value.trim();
+          if (!stagedState.parentId) stagedState.parentSelected = false;
+          refreshButtons();
+          setBaselineStatus();
+        });
+      }
+
+      refreshButtons();
+      setBaselineStatus();
+      ensureQuickReplyEditor();
+    };
+
+    const updateAutoStages = (quickReplyDirty) => {
+      if (!backdrop) return;
+      const assignPanel = backdrop.querySelector('#smax-triage-assign-panel');
+      const assignValue = backdrop.querySelector('#smax-triage-assign-value');
+      const owner = currentOwnerName || ownerForCurrent();
+      const hasOwner = !!owner;
+      const ownerFirstName = hasOwner ? (owner.trim().split(/\s+/)[0] || owner) : '';
+      const assignDisplayName = ownerFirstName || owner || 'o dono configurado';
+      const urgencySet = !!stagedState.urgency;
+      const readyForOwner = hasOwner && urgencySet && !quickReplyDirty;
+      stagedState.assign = readyForOwner;
+      if (assignPanel && assignValue) {
+        assignPanel.title = hasOwner ? `Atribuir para ${owner}` : 'Sem dono configurado';
+        if (!hasOwner) {
+          assignPanel.dataset.state = 'disabled';
+          assignValue.textContent = 'Sem dono configurado';
+        } else if (quickReplyDirty) {
+          assignPanel.dataset.state = 'pending';
+          assignValue.textContent = 'Resposta em edição — aguardando envio';
+        } else if (!urgencySet) {
+          assignPanel.dataset.state = 'pending';
+          assignValue.textContent = `Defina a urgência para ${assignDisplayName}`;
+        } else {
+          assignPanel.dataset.state = 'staged';
+          assignValue.textContent = `Pronto para ${assignDisplayName}`;
+        }
+      }
+
+      const globalInput = backdrop.querySelector('#smax-triage-global-id');
+      const globalHint = backdrop.querySelector('#smax-triage-global-hint');
+      const parentId = (stagedState.parentId || '').trim();
+      stagedState.parentId = parentId;
+      const hasParent = !!parentId;
+      stagedState.parentSelected = hasParent;
+      if (globalInput) globalInput.dataset.state = hasParent ? 'staged' : 'inactive';
+      if (globalHint) {
+        if (hasParent) {
+          globalHint.dataset.state = 'staged';
+          globalHint.textContent = `Vinculando ao #${parentId}`;
+        } else {
+          globalHint.dataset.state = 'inactive';
+          globalHint.textContent = 'Sem vínculo global';
+        }
+      }
+    };
+
+    const refreshButtons = () => {
+      if (!backdrop) return;
+      const quickReplyDirty = hasUnsavedSolution();
+      const urgencyButtons = {
+        low: backdrop.querySelector('#smax-triage-urg-low'),
+        med: backdrop.querySelector('#smax-triage-urg-med'),
+        high: backdrop.querySelector('#smax-triage-urg-high'),
+        crit: backdrop.querySelector('#smax-triage-urg-crit')
+      };
+      Object.entries(urgencyButtons).forEach(([key, btn]) => {
+        if (btn) btn.dataset.active = stagedState.urgency === key ? 'true' : 'false';
+      });
+
+      updateAutoStages(quickReplyDirty);
+
+      const commitBtn = backdrop.querySelector('#smax-triage-commit');
+      if (commitBtn) commitBtn.disabled = !anyStaged();
+    };
+
+    const setBaselineStatus = () => {
+      if (!backdrop) return;
+      if (statusLockedUntil && Date.now() < statusLockedUntil) return;
+      const statusEl = backdrop.querySelector('#smax-triage-status');
+      if (!statusEl) return;
+      if (!triageQueue.length) {
+        statusEl.textContent = 'Nenhum chamado na fila de triagem.';
+        return;
+      }
+      const total = triageQueue.length;
+      const position = Math.min(Math.max(triageIndex, 0) + 1, total);
+      const stagedBits = [];
+      if (stagedState.urgency) stagedBits.push('urgência');
+      if (stagedState.assign) stagedBits.push('atribuir');
+      if (stagedState.parentSelected && stagedState.parentId) stagedBits.push('global');
+      if (hasUnsavedSolution()) stagedBits.push('resposta');
+      const pending = stagedBits.length ? ` Pendências: ${stagedBits.join(', ')}.` : '';
+      statusEl.textContent = `${position} de ${total}.${pending}`;
+    };
+
+    const toggleUrgency = (level) => {
+      stagedState.urgency = stagedState.urgency === level ? null : level;
+      refreshButtons();
+      setBaselineStatus();
+    };
+
+    const extractBulkErrorMessages = (response) => {
+      if (!response) return ['SMAX não retornou resposta.'];
+      if (response.skipped) return [];
+      const messages = [];
+      const pushMessage = (value) => {
+        if (value == null) return;
+        const text = String(value).trim();
+        if (text) messages.push(text);
+      };
+      const harvest = (source) => {
+        if (!source) return;
+        if (Array.isArray(source)) {
+          source.forEach((entry) => harvest(entry));
+          return;
+        }
+        if (typeof source === 'object') {
+          pushMessage(source.message || source.detail || source.description || source.text || source.errorMessage || source.reason);
+          return;
+        }
+        pushMessage(source);
+      };
+      const meta = response.meta || {};
+      harvest(meta.errorDetailsList);
+      harvest(meta.errorDetails);
+      harvest(meta.errorDetailsMetaList);
+      harvest(meta.error_details_list);
+      harvest(meta.error_details);
+      harvest(response.errorDetailsList);
+      harvest(response.errorDetails);
+      pushMessage(meta.errorMessage || meta.error_message || meta.error);
+      pushMessage(response.message || response.error);
+      if (!messages.length && meta.completion_status && meta.completion_status !== 'OK') {
+        pushMessage(`Status: ${meta.completion_status}`);
+      }
+      return messages;
+    };
+
+    const commit = () => {
+      const item = currentItem();
+      if (!item) return;
+      const props = { Id: String(item.idText) };
+      if (stagedState.urgency) Object.assign(props, urgencyMap[stagedState.urgency]);
+      const solutionHtml = hasUnsavedSolution() ? readQuickReplyHtml() : '';
+      if (solutionHtml) {
+        props.Solution = solutionHtml;
+        props.CompletionCode = quickReplyCompletionCode;
+      }
+
+      let expertAssigneeId = '';
+      if (props.Solution && prefs.myPersonId && !stagedState.assign) {
+        expertAssigneeId = String(prefs.myPersonId).trim();
+      } else if (stagedState.assign) {
+        const ownerName = ownerForCurrent();
+        if (ownerName) {
+          const target = ownerName.toUpperCase();
+          for (const p of DataRepository.peopleCache.values()) {
+            if ((p.name || '').toUpperCase() === target) {
+              expertAssigneeId = String(p.id);
+              break;
+            }
+          }
+        }
+      }
+
+      if (expertAssigneeId) props.ExpertAssignee = expertAssigneeId;
+
+      const doGlobal = stagedState.parentSelected && stagedState.parentId;
+      if (!stagedState.urgency && !props.ExpertAssignee && !doGlobal && !props.Solution) {
+        setStatus('Nada para gravar.', 2500);
+        return;
+      }
+
+      if (!prefs.enableRealWrites) {
+        setStatus('Modo simulação ativo. Mudanças não foram gravadas.', 2500);
+        advanceQueue();
+        return;
+      }
+
+      setStatus('Gravando alterações...');
+      const tasks = [];
+      if (stagedState.urgency || props.ExpertAssignee || props.Solution) tasks.push(Api.postUpdateRequest(props));
+      if (doGlobal) {
+        tasks.push(
+          Api.postCreateRequestCausesRequest(stagedState.parentId, props.Id).then((relRes) => {
+            if (!(relRes && relRes.meta && relRes.meta.completion_status === 'OK')) return relRes;
+            return Api.postUpdateRequest({ Id: props.Id, PhaseId: 'Escalate' });
+          })
+        );
+      }
+      Promise.all(tasks).then((results) => {
+        const failures = results.filter((res) => !res || (res.meta && res.meta.completion_status !== 'OK'));
+        const hadError = failures.length > 0;
+        if (!hadError && props.Solution) {
+          syncQuickReplyBaseline(props.Solution);
+          if (DataRepository.updateCachedSolution) DataRepository.updateCachedSolution(props.Id, props.Solution);
+        }
+        if (hadError) {
+          const detailMessages = failures.flatMap((payload) => extractBulkErrorMessages(payload)).filter(Boolean);
+          const message = detailMessages.length
+            ? `SMAX recusou a gravação: ${detailMessages[0]}`
+            : 'SMAX recusou a gravação.';
+          console.warn('[SMAX] Falha ao gravar alterações:', failures);
+          setStatus(message, 4000);
+        } else {
+          setStatus('Alterações gravadas com sucesso.', 2000);
+          advanceQueue();
+        }
+      }).catch((err) => {
+        console.warn('[SMAX] Erro inesperado durante gravação:', err);
+        setStatus('Erro ao gravar alterações.', 4000);
+      });
+    };
+
+    let statusTimer = null;
+    let statusLockedUntil = 0;
+    const setStatus = (msg, duration = 2000) => {
+      if (!backdrop) return;
+      const statusEl = backdrop.querySelector('#smax-triage-status');
+      if (!statusEl) return;
+      statusEl.textContent = msg;
+      statusLockedUntil = Date.now() + duration;
+      if (statusTimer) clearTimeout(statusTimer);
+      statusTimer = setTimeout(() => {
+        statusTimer = null;
+        statusLockedUntil = 0;
+        setBaselineStatus();
+      }, duration);
+    };
+
+    const navigateQueue = (delta) => {
+      if (hasUnsavedSolution()) {
+        const discard = window.confirm('A resposta atual não foi salva. Deseja descartá-la antes de continuar?');
+        if (!discard) {
+          setStatus('Navegação cancelada para preservar a resposta não salva.', 3500);
+          return;
+        }
+        clearQuickReplyState();
+        setStatus('Resposta descartada. Carregando outro chamado...', 3000);
+      }
+      if (!triageQueue.length) {
+        render();
+        return;
+      }
+
+      const currentId = currentItem()?.idText || null;
+
+      if (GridTracker.consume()) {
+        const { list: rebuilt } = buildQueue();
+        if (rebuilt.length) {
+          triageQueue = rebuilt;
+          if (currentId) {
+            const nextIndex = rebuilt.findIndex((entry) => entry.idText === currentId);
+            if (nextIndex >= 0) triageIndex = (nextIndex + delta + rebuilt.length) % rebuilt.length;
+            else triageIndex = delta > 0 ? 0 : rebuilt.length - 1;
+          } else {
+            triageIndex = delta > 0 ? 0 : rebuilt.length - 1;
+          }
+        } else {
+          triageQueue = rebuilt;
+          triageIndex = -1;
+        }
+      } else if (triageQueue.length) {
+        const length = triageQueue.length;
+        triageIndex = (triageIndex + delta + length) % length;
+      }
+
+      render();
+    };
+
+    const advanceQueue = () => navigateQueue(1);
+    const retreatQueue = () => navigateQueue(-1);
+
+    const openHud = () => {
+      DataRepository.ensurePeopleLoaded();
+      if (startBtn) startBtn.style.display = 'none';
+      backdrop.style.display = 'flex';
+      const finalsInput = backdrop.querySelector('#smax-personal-finals-input');
+      if (finalsInput) finalsInput.value = prefs.personalFinalsRaw || '';
+      const { list, selectedId } = buildQueue();
+      triageQueue = list;
+      if (!triageQueue.length) triageIndex = -1;
+      else if (selectedId) {
+        const focusIdx = triageQueue.findIndex((entry) => entry.idText === selectedId);
+        triageIndex = focusIdx >= 0 ? focusIdx : 0;
+      } else {
+        triageIndex = 0;
+      }
+      render();
+      const realFlag = backdrop.querySelector('#smax-triage-real-flag');
+      if (realFlag) realFlag.style.display = prefs.enableRealWrites ? 'block' : 'none';
+    };
+
+    const closeHud = () => {
+      backdrop.style.display = 'none';
+      if (startBtn) startBtn.style.display = 'block';
+      hideQuickGuide();
+    };
+
+    const init = () => {
+      if (startBtn) return;
+      hookNativeEditors();
+      startBtn = document.createElement('button');
+      startBtn.id = 'smax-triage-start-btn';
+      startBtn.textContent = 'Iniciar triagem';
+      document.body.appendChild(startBtn);
+
+      backdrop = document.createElement('div');
+      backdrop.id = 'smax-triage-hud-backdrop';
+      backdrop.innerHTML = `
+        <div id="smax-triage-hud">
+          <aside id="smax-triage-discussions">
+            <div class="smax-discussions-placeholder">Inicie a triagem para carregar as discussões deste chamado.</div>
+          </aside>
+          <div id="smax-triage-hud-main">
+            <div id="smax-triage-hud-header">
+              <div class="smax-triage-title-bar">
+                <h3>Triagem de Chamados</h3>
+                <label id="smax-personal-finals-label" title="Limite os chamados pelos seus dígitos finais">
+                  <span>Meus finais</span>
+                  <input type="text" id="smax-personal-finals-input" placeholder="0-32,66-99" inputmode="numeric" autocomplete="off" />
+                </label>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="smax-triage-header-nav">
+                  <button type="button" id="smax-triage-prev" disabled aria-label="Chamado anterior" title="Chamado anterior">&#x2039;</button>
+                  <button type="button" id="smax-triage-next" disabled aria-label="Próximo chamado" title="Próximo chamado">&#x203A;</button>
+                </span>
+                <button type="button" id="smax-triage-guide-btn" title="Dicas rápidas">Guia Rápido</button>
+                <button type="button" class="smax-triage-secondary" id="smax-triage-close" title="Minimizar triagem">_</button>
+              </div>
+            </div>
+            <div id="smax-quick-guide-panel" aria-hidden="true">
+              <h4>Guia rápido</h4>
+              <ul>
+                <li>Use os botões de urgência para definir impacto antes de atribuir.</li>
+                <li>“Meus finais” limita a fila de triagem aos IDs desejados.</li>
+                <li>Editar a resposta rápida já a deixa pronta; "ENVIAR" grava tudo no SMAX.</li>
+                <li>Filtre os chamados através do SMAX corretamente antes de começar a Triagem</li>
+                <li>Configure corretamente os finais e colegas ausentes através do ícone de configuração, no canto direito inferior do SMAX</li>
+                <li>No mesmo painel, escolha quem assume automaticamente após enviar respostas rápidas.</li>
+                <li>O filtro (não a coluna) "Hora de Criação" do SMAX permite escolher um intervalo de datas.</li>
+                <li>Os chamados são ordenados sempre por VIP, e mais antigos primeiro.</li>
+                <li>CUIDADO DOBRADO: Vincular Global NÃO VERIFICA se o número é válido.</li>
+              </ul>
+              <div style="margin-top:8px;display:flex;justify-content:flex-end;">
+                <button type="button" class="smax-triage-secondary" id="smax-guide-close" style="padding:4px 10px;">Fechar</button>
+              </div>
+            </div>
+            <div id="smax-triage-hud-body">
+              <div id="smax-triage-ticket-details">
+                <div style="font-size:14px;color:#9ca3af;">Inicie a triagem para carregar um chamado.</div>
+              </div>
+            </div>
+            <div id="smax-triage-hud-footer">
+              <div class="smax-triage-top-row">
+                <div class="smax-triage-inline-controls">
+                  <div class="smax-triage-urg-group">
+                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-low" id="smax-triage-urg-low" disabled>Baixa</button>
+                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-med" id="smax-triage-urg-med" disabled>Média</button>
+                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-high" id="smax-triage-urg-high" disabled>Alta</button>
+                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
+                  </div>
+                  <div class="smax-triage-auto-panels">
+                    <div class="smax-triage-indicator" id="smax-triage-assign-panel" data-state="disabled">
+                      <span class="smax-indicator-label">Atribuição automática</span>
+                      <span class="smax-indicator-value" id="smax-triage-assign-value">Sem dono configurado</span>
+                    </div>
+                    <div class="smax-triage-global-group">
+                      <input type="text" class="smax-global-input" id="smax-triage-global-id" placeholder="ID do global (cuidado)" inputmode="numeric" autocomplete="off" />
+                      <div class="smax-global-hint" id="smax-triage-global-hint">Sem vínculo global</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="smax-triage-main-actions">
+                  <div id="smax-triage-real-flag" style="font-size:11px;font-weight:600;color:#f97316;display:none;">MODO REAL ATIVO</div>
+                  <div class="smax-triage-main-actions-buttons">
+                    <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>ENVIAR</button>
+                  </div>
+                </div>
+              </div>
+              <div id="smax-triage-quickreply-card" data-staged="false">
+                <textarea id="smax-triage-quickreply-editor" placeholder="Digite aqui sua resposta..."></textarea>
+              </div>
+              <div id="smax-triage-status-row" data-empty="true">
+                <div id="smax-triage-status">Fila de triagem ainda não inicializada.</div>
+                <div id="smax-triage-attachment-list" data-state="empty">Sem anexos.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(backdrop);
+
+      startBtn.addEventListener('click', openHud);
+      backdrop.querySelector('#smax-triage-close').addEventListener('click', closeHud);
+      backdrop.addEventListener('click', (event) => {
+        const panel = backdrop.querySelector('#smax-quick-guide-panel');
+        if (panel && panel.style.display === 'block') {
+          if (!panel.contains(event.target) && event.target.id !== 'smax-triage-guide-btn') hideQuickGuide();
+        }
+        if (event.target === backdrop) closeHud();
+      });
+      const prevBtn = backdrop.querySelector('#smax-triage-prev');
+      if (prevBtn) prevBtn.addEventListener('click', () => retreatQueue());
+      backdrop.querySelector('#smax-triage-next').addEventListener('click', () => advanceQueue());
+      backdrop.querySelector('#smax-triage-commit').addEventListener('click', () => commit());
+      const quickTextarea = backdrop.querySelector('#smax-triage-quickreply-editor');
+      if (quickTextarea) quickTextarea.addEventListener('input', () => {
+        if (!quickReplyEditor) handleQuickReplyChange(quickTextarea.value);
+      });
+      const attachmentListEl = backdrop.querySelector('#smax-triage-attachment-list');
+      if (attachmentListEl) {
+        attachmentListEl.addEventListener('click', (evt) => {
+          const chip = evt.target.closest('.smax-attachment-chip');
+          if (!chip) return;
+          const attachment = currentAttachmentList.find((item) => item.id === chip.dataset.attachmentId);
+          if (!attachment) return;
+          AttachmentService.preview(attachment);
+        });
+      }
+      const finalsInput = backdrop.querySelector('#smax-personal-finals-input');
+      if (finalsInput) {
+        finalsInput.value = prefs.personalFinalsRaw || '';
+        finalsInput.addEventListener('input', () => {
+          const cleaned = finalsInput.value.replace(/[^0-9,\-\s]/g, '');
+          if (cleaned !== finalsInput.value) finalsInput.value = cleaned;
+          prefs.personalFinalsRaw = cleaned.trim();
+          refreshPersonalFinalsSet();
+          savePrefs();
+          rebuildQueueForPersonalFinals();
+        });
+      }
+      const guideBtn = backdrop.querySelector('#smax-triage-guide-btn');
+      if (guideBtn) guideBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        toggleQuickGuide();
+      });
+      const guideClose = backdrop.querySelector('#smax-guide-close');
+      if (guideClose) guideClose.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        hideQuickGuide();
+      });
+      scheduleQuickReplyEditor();
+    };
+
+    return { init };
+  })();
+
+  /* =========================================================
+   * Boot
+   * =======================================================*/
+  const boot = () => {
+    CommentExpander.init();
+    SectionTweaks.init();
+    Orchestrator.init();
+    SettingsPanel.init();
+    GridTracker.init();
+    TriageHUD.init();
+    SkullFlag.init();
+  };
+
+  Utils.onDomReady(boot);
+})();
