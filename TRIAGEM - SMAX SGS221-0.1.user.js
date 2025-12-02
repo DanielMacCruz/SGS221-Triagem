@@ -3150,6 +3150,18 @@
       return messages;
     };
 
+    const summarizeBulkOutcome = (payload, index = 0) => {
+      if (payload && payload.skipped) return { ok: true, messages: [] };
+      const errors = extractBulkErrorMessages(payload);
+      const statusRaw = payload && payload.meta ? (payload.meta.completion_status || payload.meta.completionStatus) : '';
+      const normalizedStatus = typeof statusRaw === 'string' ? statusRaw.toUpperCase() : '';
+      const ok = normalizedStatus === 'OK' || (!normalizedStatus && !errors.length && !!payload);
+      if (ok) return { ok: true, messages: [] };
+      if (errors.length) return { ok: false, messages: errors };
+      if (!payload) return { ok: false, messages: ['SMAX não retornou resposta.'] };
+      return { ok: false, messages: [`Operação ${index + 1} falhou sem detalhes (status: ${normalizedStatus || 'desconhecido'}).`] };
+    };
+
     const commit = () => {
       const item = currentItem();
       if (!item) return;
@@ -3203,19 +3215,18 @@
         );
       }
       Promise.all(tasks).then((results) => {
-        const failures = results.filter((res) => !res || (res.meta && res.meta.completion_status !== 'OK'));
-        const hadError = failures.length > 0;
-        if (!hadError && props.Solution) {
+        const outcomes = results.map((payload, idx) => summarizeBulkOutcome(payload, idx));
+        const firstFailure = outcomes.find((entry) => !entry.ok);
+        if (!firstFailure && props.Solution) {
           syncQuickReplyBaseline(props.Solution);
           if (DataRepository.updateCachedSolution) DataRepository.updateCachedSolution(props.Id, props.Solution);
         }
-        if (hadError) {
-          const detailMessages = failures.flatMap((payload) => extractBulkErrorMessages(payload)).filter(Boolean);
-          const message = detailMessages.length
-            ? `SMAX recusou a gravação: ${detailMessages[0]}`
+        if (firstFailure) {
+          const detailMessage = firstFailure.messages && firstFailure.messages.length
+            ? firstFailure.messages[0]
             : 'SMAX recusou a gravação.';
-          console.warn('[SMAX] Falha ao gravar alterações:', failures);
-          setStatus(message, 4000);
+          console.warn('[SMAX] Falha ao gravar alterações:', { results, outcomes });
+          setStatus(`SMAX recusou a gravação: ${detailMessage}`, 4000);
         } else {
           setStatus('Alterações gravadas com sucesso.', 2000);
           advanceQueue();
