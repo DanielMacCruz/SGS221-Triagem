@@ -74,6 +74,150 @@
   const savePrefs = PrefStore.save;
 
   /* =========================================================
+   * Activity Log (persistent workload tracking)
+   * =======================================================*/
+  const ActivityLog = (() => {
+    const STORAGE_KEY = 'smax_activity_log';
+    const MAX_ENTRIES = 5000;
+    let entries = [];
+
+    const load = () => {
+      try {
+        const saved = GM_getValue(STORAGE_KEY);
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          entries = parsed;
+          console.log('[SMAX] Activity log loaded:', entries.length, 'entries');
+        }
+      } catch (err) {
+        console.warn('[SMAX] Failed to load activity log:', err);
+      }
+    };
+
+    const save = () => {
+      try {
+        // Auto-prune oldest entries if over limit
+        if (entries.length > MAX_ENTRIES) {
+          entries = entries.slice(entries.length - MAX_ENTRIES);
+        }
+        GM_setValue(STORAGE_KEY, JSON.stringify(entries));
+      } catch (err) {
+        console.error('[SMAX] Failed to save activity log:', err);
+      }
+    };
+
+    const deriveRelevantWork = (data) => {
+      // Priority: RESPONDIDO > VINCULO_GLOBAL > TRANSFERIDO > DESIGNADO
+      if (data.answered) return 'RESPONDIDO';
+      if (data.globalAssigned) return 'VINCULO_GLOBAL';
+      if (data.transferred) return 'TRANSFERIDO';
+      if (data.assigned) return 'DESIGNADO';
+      return 'OUTRO';
+    };
+
+    const log = (data) => {
+      if (!data || !data.ticketId) return;
+      const entry = {
+        ts: Date.now(),
+        ticketId: String(data.ticketId || ''),
+        assigned: !!data.assigned,
+        assignedTo: data.assignedTo || '',
+        globalAssigned: !!data.globalAssigned,
+        globalChangeId: data.globalChangeId || '',
+        transferred: !!data.transferred,
+        transferredTo: data.transferredTo || '',
+        answered: !!data.answered,
+        relevantWork: '',
+        user: data.user || prefs.myPersonName || '',
+        success: data.success !== false
+      };
+      entry.relevantWork = deriveRelevantWork(entry);
+      entries.push(entry);
+      save();
+      console.log('[SMAX] Activity logged:', entry);
+    };
+
+    const formatDateBrazilian = (ts) => {
+      try {
+        const d = new Date(ts);
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      } catch {
+        return '';
+      }
+    };
+
+    const escapeCSV = (value) => {
+      if (value == null) return '';
+      const str = String(value);
+      if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+
+    const exportCsv = (filterDays = null) => {
+      let toExport = entries.slice();
+      if (filterDays && filterDays > 0) {
+        const cutoff = Date.now() - (filterDays * 24 * 60 * 60 * 1000);
+        toExport = toExport.filter((e) => e.ts >= cutoff);
+      }
+      if (!toExport.length) {
+        alert('Nenhuma entrada para exportar.');
+        return;
+      }
+      const headers = ['Data', 'Hora', 'Chamado', 'Trabalho Relevante', 'Atribuído Para', 'Global', 'Transferido Para', 'Respondido', 'Usuário', 'Sucesso'];
+      const rows = toExport.map((e) => {
+        const fullDate = formatDateBrazilian(e.ts);
+        const [datePart, timePart] = fullDate.split(' ');
+        return [
+          datePart || '',
+          timePart || '',
+          e.ticketId,
+          e.relevantWork,
+          e.assignedTo,
+          e.globalChangeId,
+          e.transferredTo,
+          e.answered ? 'Sim' : 'Não',
+          e.user,
+          e.success ? 'Sim' : 'Não'
+        ].map(escapeCSV).join(',');
+      });
+      const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n'); // BOM for Excel UTF-8
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const filename = `triagem_log_${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`;
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      console.log('[SMAX] Exported', toExport.length, 'log entries to', filename);
+    };
+
+    const clear = () => {
+      if (!confirm('Tem certeza que deseja limpar TODO o log de atividades? Esta ação não pode ser desfeita.')) return false;
+      entries = [];
+      save();
+      console.log('[SMAX] Activity log cleared');
+      return true;
+    };
+
+    const getCount = () => entries.length;
+
+    const getEntries = () => entries.slice();
+
+    load();
+
+    return { log, exportCsv, clear, getCount, getEntries, load };
+  })();
+
+  /* =========================================================
    * Styles
    * =======================================================*/
   GM_addStyle(`
@@ -107,6 +251,27 @@
     #smax-triage-hud-header .smax-triage-title-bar { display:flex; align-items:center; gap:10px; flex:1; }
     #smax-personal-finals-label { display:flex; align-items:center; gap:6px; font-size:11px; color:#94a3b8; }
     #smax-personal-finals-input { background:#0f172a; border:1px solid #1f2937; border-radius:999px; padding:2px 8px; color:#f8fafc; font-size:11px; min-width:120px; }
+    #smax-triage-gse-wrapper { position:relative; min-width:220px; display:flex; flex-direction:column; gap:4px; }
+    #smax-triage-gse-display { width:100%; border-radius:10px; border:1px solid #1f2937; background:#0f172a; color:#f8fafc; font-size:12px; min-height:32px; padding:6px 32px 6px 12px; text-align:left; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease, color .15s ease; }
+    #smax-triage-gse-display:disabled { opacity:0.6; cursor:not-allowed; }
+    .smax-triage-gse-chevron { font-size:11px; color:#94a3b8; transition:transform .15s ease; }
+    #smax-triage-gse-wrapper[data-open="true"] .smax-triage-gse-chevron { transform:rotate(180deg); }
+    #smax-triage-gse-dropdown { position:absolute; top:calc(100% + 6px); right:0; width:260px; background:#020617; border:1px solid #1f2937; border-radius:12px; box-shadow:0 18px 45px rgba(0,0,0,.55); padding:10px; display:none; flex-direction:column; gap:8px; z-index:9; }
+    #smax-triage-gse-wrapper[data-open="true"] #smax-triage-gse-dropdown { display:flex; }
+    #smax-triage-gse-filter { background:#0f172a; border:1px solid #1f2937; border-radius:999px; padding:5px 12px; color:#e2e8f0; font-size:12px; transition:border-color .15s ease, box-shadow .15s ease; width:100%; max-width:100%; box-sizing:border-box; }
+    #smax-triage-gse-filter::placeholder { color:#64748b; }
+    #smax-triage-gse-filter:focus { outline:none; border-color:#38bdf8; box-shadow:0 0 8px rgba(56,189,248,0.35); }
+    .smax-triage-gse-options { max-height:240px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+    .smax-triage-gse-option { border-radius:9px; border:1px solid transparent; background:rgba(15,23,42,0.85); color:#f8fafc; font-size:12px; padding:7px 10px; text-align:left; cursor:pointer; transition:border-color .12s ease, background .12s ease, color .12s ease; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .smax-triage-gse-option:hover { border-color:#38bdf8; background:#0f172a; }
+    .smax-triage-gse-option[data-active="true"] { border-color:#22c55e; background:#052e16; color:#bbf7d0; box-shadow:0 0 12px rgba(34,197,94,0.35); }
+    .smax-triage-gse-option[data-empty="true"] { opacity:0.7; border-style:dashed; cursor:default; justify-content:center; }
+    .smax-triage-gse-option[data-ghost="true"] { color:#94a3b8; font-style:italic; }
+    .smax-triage-gse-chip { font-size:11px; color:#67e8f9; background:rgba(14,165,233,0.15); border-radius:999px; padding:2px 8px; text-transform:uppercase; letter-spacing:.05em; }
+    #smax-triage-gse-empty { font-size:12px; color:#94a3b8; text-align:center; padding:8px 4px; border:1px dashed #334155; border-radius:10px; }
+    #smax-triage-gse-wrapper[data-state="staged"] #smax-triage-gse-display { border-color:#22c55e; background:#052e16; color:#bbf7d0; box-shadow:0 0 14px rgba(34,197,94,0.35); }
+    #smax-triage-gse-wrapper[data-state="staged"] #smax-triage-gse-dropdown { border-color:#22c55e; box-shadow:0 18px 45px rgba(34,197,94,0.45); }
+    #smax-triage-gse-wrapper[data-state="loading"] #smax-triage-gse-display { border-style:dashed; }
     #smax-personal-finals-input::placeholder { color:#6b7280; }
     #smax-triage-hud-body { background:#020617; border-radius:8px; padding:12px 14px; flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
     #smax-triage-hud-footer { display:flex; flex-direction:column; gap:12px; }
@@ -186,6 +351,17 @@
     #smax-attachment-modal img { max-width:90vw; max-height:90vh; border-radius:10px; box-shadow:0 20px 45px rgba(0,0,0,0.65); }
     #smax-attachment-modal button { position:absolute; top:18px; right:18px; border:none; width:40px; height:40px; border-radius:50%; background:rgba(15,23,42,0.85); color:#f8fafc; font-size:22px; cursor:pointer; }
     #smax-attachment-modal .smax-attachment-caption { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); color:#e2e8f0; font-size:14px; text-align:center; max-width:90vw; }
+
+    #smax-activity-log-panel { margin-top:14px; padding:10px 12px; border:1px solid #ddd; border-radius:6px; background:#f8fafc; }
+    #smax-activity-log-panel h4 { margin:0 0 8px; font-size:13px; font-weight:600; color:#1f2937; }
+    .smax-log-stats { font-size:12px; color:#4b5563; margin-bottom:10px; }
+    .smax-log-actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .smax-log-btn { padding:6px 12px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; color:#1f2937; font-size:12px; cursor:pointer; transition:background 0.15s ease, border-color 0.15s ease; }
+    .smax-log-btn:hover { background:#e2e8f0; border-color:#94a3b8; }
+    .smax-log-btn-primary { background:#1976d2; border-color:#1976d2; color:#fff; }
+    .smax-log-btn-primary:hover { background:#1565c0; border-color:#1565c0; }
+    .smax-log-btn-danger { background:#dc2626; border-color:#dc2626; color:#fff; }
+    .smax-log-btn-danger:hover { background:#b91c1c; border-color:#b91c1c; }
   `);
 
   /* ========================================================
@@ -411,6 +587,186 @@
   })();
 
   /* =========================================================
+   * API client (tenant + REST helpers)
+   * =======================================================*/
+  const ApiClient = (() => {
+    let cachedTenantId = null;
+
+    const readCookie = (key) => {
+      if (!key) return null;
+      const match = document.cookie.match(new RegExp(`${key}=([^;]+)`));
+      return match ? decodeURIComponent(match[1]) : null;
+    };
+
+    const pickTenantFromUrl = () => {
+      try {
+        const search = new URLSearchParams(window.location.search || '');
+        return search.get('tenantid') || search.get('TENANTID');
+      } catch {
+        return null;
+      }
+    };
+
+    const pickTenantFromHash = () => {
+      const hash = window.location.hash || '';
+      const match = hash.match(/tenantid=(\d+)/i);
+      return match ? match[1] : null;
+    };
+
+    const pickTenantFromStorage = () => {
+      try {
+        return sessionStorage.getItem('smaxTenantId') || localStorage.getItem('smaxTenantId');
+      } catch {
+        return null;
+      }
+    };
+
+    const resolveTenantId = () => {
+      if (cachedTenantId) return cachedTenantId;
+      const explicit = window.SMAX_TENANT_ID || window.globalTenantId;
+      cachedTenantId = (explicit || pickTenantFromUrl() || pickTenantFromHash() || readCookie('TENANTID') || pickTenantFromStorage() || '').trim();
+      if (!cachedTenantId) cachedTenantId = '';
+      return cachedTenantId || null;
+    };
+
+    const setTenantId = (value) => {
+      cachedTenantId = value ? String(value).trim() : '';
+    };
+
+    const getTenantId = () => resolveTenantId();
+
+    const restBase = () => {
+      const tenantId = getTenantId();
+      return tenantId ? `/rest/${tenantId}` : '/rest';
+    };
+
+    const normalizePath = (path = '') => {
+      if (!path) return restBase();
+      if (/^https?:\/\//i.test(path)) return path;
+      if (path.startsWith('/rest/')) return path;
+      const trimmed = path.replace(/^\/+/, '');
+      return `${restBase()}/${trimmed}`.replace(/\/+$/, '');
+    };
+
+    const toSearchParams = (input) => {
+      if (!input) return null;
+      if (input instanceof URLSearchParams) return input;
+      const pairs = Object.entries(input).reduce((acc, [key, value]) => {
+        if (value === undefined || value === null || value === '') return acc;
+        acc.push([key, String(value)]);
+        return acc;
+      }, []);
+      return pairs.length ? new URLSearchParams(pairs) : null;
+    };
+
+    const buildUrl = (path, { searchParams, includeTenantParam } = {}) => {
+      const url = new URL(normalizePath(path), window.location.origin);
+      const params = toSearchParams(searchParams);
+      if (params) params.forEach((value, key) => url.searchParams.set(key, value));
+      if (includeTenantParam) {
+        const tenantId = getTenantId();
+        if (tenantId) url.searchParams.set('TENANTID', tenantId);
+      }
+      return url.toString().replace(/\+/g, '%20');
+    };
+
+    const getXsrfToken = () => readCookie('XSRF-TOKEN');
+
+    const prepareBody = (body, headers) => {
+      if (!body || typeof body !== 'object') return body;
+      if (body instanceof FormData || body instanceof Blob || body instanceof ArrayBuffer) return body;
+      if (!headers['Content-Type']) headers['Content-Type'] = 'application/json;charset=utf-8';
+      return JSON.stringify(body);
+    };
+
+    const request = async (path, options = {}) => {
+      const {
+        method = 'GET',
+        headers = {},
+        body,
+        searchParams,
+        includeTenantParam = false,
+        useXsrf = false,
+        expectJson = true,
+        timeout = 0
+      } = options;
+      const finalHeaders = {
+        Accept: 'application/json, text/plain, */*',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...headers
+      };
+      if (useXsrf) {
+        const token = getXsrfToken();
+        if (token) finalHeaders['X-XSRF-TOKEN'] = token;
+      }
+      let abortTimer;
+      const controller = timeout ? new AbortController() : null;
+      if (controller && timeout) {
+        abortTimer = setTimeout(() => controller.abort(), timeout);
+      }
+      const url = buildUrl(path, { searchParams, includeTenantParam });
+      const response = await fetch(url, {
+        method,
+        headers: finalHeaders,
+        body: prepareBody(body, finalHeaders),
+        credentials: 'include',
+        signal: controller ? controller.signal : undefined
+      });
+      if (abortTimer) clearTimeout(abortTimer);
+      if (!response.ok) throw new Error(`[ApiClient] HTTP ${response.status}`);
+      if (!expectJson) return response.text();
+      const text = await response.text();
+      if (!text) return null;
+      try { return JSON.parse(text); } catch { return text; }
+    };
+
+    const emsBulk = (payload, options = {}) => request('ems/bulk', {
+      method: 'POST',
+      body: payload,
+      useXsrf: true,
+      ...options
+    });
+
+    const collectionQuery = (entity, params = {}) => {
+      const search = new URLSearchParams();
+      ['filter', 'layout', 'view', 'orderBy', 'offset', 'size', 'fields'].forEach((key) => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          search.set(key, params[key]);
+        }
+      });
+      return request(`ems/${entity}`, {
+        method: 'GET',
+        searchParams: search,
+        includeTenantParam: true
+      });
+    };
+
+    const authenticate = (login, password, { tenantId } = {}) => {
+      const params = {};
+      const resolvedTenant = tenantId || getTenantId();
+      if (resolvedTenant) params.TENANTID = resolvedTenant;
+      return request('/auth/authentication-endpoint/authenticate/token', {
+        method: 'POST',
+        body: { login, password },
+        searchParams: params,
+        expectJson: false
+      });
+    };
+
+    return {
+      getTenantId,
+      setTenantId,
+      request,
+      restUrl: normalizePath,
+      ems: {
+        bulk: emsBulk,
+        collection: collectionQuery
+      },
+      authenticate
+    };
+  })();
+
+  /* =========================================================
    * Color registry for owner badges
    * =======================================================*/
   const ColorRegistry = (() => {
@@ -473,6 +829,11 @@
         location: '49893064'
       }
     ];
+    const supportGroupMap = new Map();
+    let supportGroupTotal = null;
+    const supportGroupListeners = new Set();
+    let supportGroupsLoadPromise = null;
+    let supportGroupsLoadedOnce = false;
 
     const ensureManualPeople = () => {
       manualPeopleSeed.forEach((person) => {
@@ -484,7 +845,34 @@
     let peopleTotal = null;
     const queueListeners = new Set();
     const peopleListeners = new Set();
+    const getSupportGroupsSnapshot = () => Array.from(supportGroupMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const notifySupportGroupListeners = () => {
+      const snapshot = getSupportGroupsSnapshot();
+      supportGroupListeners.forEach((fn) => {
+        try { fn(snapshot); } catch (err) { console.warn('[SMAX] Support group listener failed:', err); }
+      });
+    };
     ensureManualPeople();
+    let peopleLoadPromise = null;
+    let peopleLoadedOnce = false;
+    const ingestSupportGroupPayload = (payload) => {
+      try {
+        if (!payload || typeof payload !== 'object') return;
+        if (payload.meta && typeof payload.meta.total_count === 'number') supportGroupTotal = payload.meta.total_count;
+        const entities = Array.isArray(payload.entities) ? payload.entities : [];
+        entities.forEach((ent) => {
+          if (!ent || ent.entity_type !== 'PersonGroup') return;
+          const props = ent.properties || {};
+          const id = props.Id != null ? String(props.Id) : '';
+          const name = (props.Name || '').toString().trim();
+          if (!id || !name) return;
+          supportGroupMap.set(id, { id, name, isDeleted: !!props.IsDeleted });
+        });
+        notifySupportGroupListeners();
+      } catch (err) {
+        console.warn('[SMAX] Failed to ingest support group payload:', err);
+      }
+    };
 
     const notifyQueueListeners = () => {
       queueListeners.forEach((fn) => {
@@ -529,6 +917,62 @@
       if (normalized === 'PUBLIC') return { code: normalized, label: 'Público' };
       if (normalized === 'EXTERNAL') return { code: normalized, label: 'Externo' };
       return { code: normalized, label: 'Interno' };
+    };
+    const normalizeGroupIdValue = (value) => {
+      if (!value) return '';
+      if (typeof value === 'string') {
+        const cleaned = value.replace(/PersonGroup:?/i, '').trim();
+        const match = cleaned.match(/\d{3,}/g);
+        if (match && match.length) return match[match.length - 1];
+        return cleaned;
+      }
+      if (typeof value === 'object') {
+        if (value.Id != null) return String(value.Id);
+        if (value.id != null) return String(value.id);
+        if (value.href) {
+          const match = String(value.href).match(/PersonGroup\/([0-9]+)/i);
+          if (match) return match[1];
+        }
+      }
+      return '';
+    };
+    const pickAssignmentGroupMeta = (props = {}, rel = {}) => {
+      const relGroup = rel && rel.AssignmentGroup ? rel.AssignmentGroup : null;
+      const relExpertGroup = rel && rel.ExpertGroup ? rel.ExpertGroup : null;
+      const relAssignedGroup = rel && rel.AssignedToGroup ? rel.AssignedToGroup : null;
+      const idSources = [
+        props.AssignmentGroup,
+        relGroup,
+        props.AssignmentGroupRef,
+        props.AssignmentGroupId,
+        props.AssignmentGroupId_c,
+        props.ExpertGroup,
+        relExpertGroup,
+        relAssignedGroup,
+        props.AssignedToGroup
+      ];
+      let assignmentGroupId = '';
+      for (const src of idSources) {
+        assignmentGroupId = normalizeGroupIdValue(src);
+        if (assignmentGroupId) break;
+      }
+      const nameCandidates = [
+        props.AssignmentGroupDisplayLabel,
+        props.AssignmentGroupName,
+        relGroup && (relGroup.DisplayLabel || relGroup.Name || relGroup.label),
+        relExpertGroup && (relExpertGroup.DisplayLabel || relExpertGroup.Name || relExpertGroup.label),
+        relAssignedGroup && (relAssignedGroup.DisplayLabel || relAssignedGroup.Name || relAssignedGroup.label)
+      ];
+      let assignmentGroupName = '';
+      for (const candidate of nameCandidates) {
+        if (!candidate) continue;
+        const trimmed = String(candidate).trim();
+        if (trimmed) {
+          assignmentGroupName = trimmed;
+          break;
+        }
+      }
+      return { assignmentGroupId, assignmentGroupName };
     };
 
     const normalizeCommentEntry = (raw) => {
@@ -674,6 +1118,7 @@
       let discussions = parseCommentsCollection(props.Comments || props.comments);
       if (!discussions.length && existing.discussions) discussions = existing.discussions;
 
+      const { assignmentGroupId, assignmentGroupName } = pickAssignmentGroupMeta(props, rel);
       triageCache.set(id, Object.assign({}, existing, {
         idText: id,
         idNum: Number.isNaN(idNum) ? null : idNum,
@@ -687,7 +1132,9 @@
         solutionHtml: String(solutionHtml),
         solutionText,
         requestedForName,
-        discussions
+        discussions,
+        assignmentGroupId,
+        assignmentGroupName
       }));
     };
 
@@ -783,82 +1230,203 @@
       }
     };
 
-    const ensurePeopleLoaded = () => {
-      try {
-        const pageSize = 50;
-        const baseUrl = '/rest/213963628/ems/Person?filter=' +
-          encodeURIComponent('(PersonToGroup[Id in (51642955)])') +
-          '&layout=Name,Avatar,Location,IsVIP,OrganizationalGroup,Upn,IsDeleted,FirstName,LastName,EmployeeNumber,Email' +
-          '&meta=totalCount&order=Name+asc';
-
-        const fetchPage = (skip) => {
-          const url = `${baseUrl}&size=${pageSize}&skip=${skip || 0}`;
-          return fetch(url, {
-            credentials: 'include',
-            headers: { Accept: 'application/json, text/plain, */*', 'X-Requested-With': 'XMLHttpRequest' }
-          })
-            .then((r) => r.text())
-            .then((txt) => {
-              if (!txt) return;
-              try {
-                ingestPersonListPayload(JSON.parse(txt));
-              } catch (err) {
-                console.warn('[SMAX] Failed to parse people page:', err);
-              }
-            })
-            .catch(() => {});
-        };
-
-        fetchPage(0).then(() => {
-          if (typeof peopleTotal !== 'number' || peopleTotal <= peopleCache.size) return;
-          const promises = [];
-          for (let skip = pageSize; skip < peopleTotal; skip += pageSize) {
-            promises.push(fetchPage(skip));
-          }
-          Promise.all(promises).then(() => {
-            console.log('[SMAX] People cache ready:', peopleCache.size, '/', peopleTotal);
-          });
-        });
-      } catch (err) {
-        console.warn('[SMAX] Failed to start people loading:', err);
-      }
+    const basePeopleParams = {
+      filter: '(PersonToGroup[Id in (51642955)])',
+      layout: 'Name,Avatar,Location,IsVIP,OrganizationalGroup,Upn,IsDeleted,FirstName,LastName,EmployeeNumber,Email',
+      meta: 'totalCount',
+      order: 'Name asc',
+      size: 50,
+      skip: 0
+    };
+    const supportGroupBaseParams = {
+      filter: "(Status = 'Active' or Status = null)",
+      layout: 'Id,Name,IsDeleted',
+      meta: 'totalCount',
+      order: 'Name asc',
+      size: 200,
+      skip: 0
     };
 
-    const ensureRequestPayload = (id, { force = false } = {}) => {
+    const toQueryParams = (base, overrides = {}) => {
+      const merged = Object.assign({}, base, overrides);
+      return Object.entries(merged).reduce((acc, [key, value]) => {
+        if (value === undefined || value === null || value === '') return acc;
+        acc[key] = value;
+        return acc;
+      }, {});
+    };
+
+    const fetchPeoplePage = async (skip = 0) => {
+      const payload = await ApiClient.request('ems/Person', {
+        method: 'GET',
+        searchParams: toQueryParams(basePeopleParams, { skip }),
+        includeTenantParam: true
+      });
+      ingestPersonListPayload(payload);
+      return payload;
+    };
+    const fetchSupportGroupPage = async (skip = 0) => {
+      const payload = await ApiClient.request('ems/PersonGroup', {
+        method: 'GET',
+        searchParams: toQueryParams(supportGroupBaseParams, { skip }),
+        includeTenantParam: true
+      });
+      ingestSupportGroupPayload(payload);
+      return payload;
+    };
+
+    const buildLegacyPeopleUrl = (size, skip) => {
+      const encode = (value) => encodeURIComponent(value);
+      const base = `${ApiClient.restUrl('ems/Person')}?filter=${encode(basePeopleParams.filter)}&layout=${encode(basePeopleParams.layout)}&meta=${encode(basePeopleParams.meta)}&order=${encode(basePeopleParams.order)}`;
+      return `${base}&size=${encode(String(size))}&skip=${encode(String(skip || 0))}`;
+    };
+
+    const legacyFetchPeoplePages = () => {
+      const pageSize = basePeopleParams.size || 50;
+      const headers = { Accept: 'application/json, text/plain, */*', 'X-Requested-With': 'XMLHttpRequest' };
+      const fetchPage = (skip) => fetch(buildLegacyPeopleUrl(pageSize, skip), { credentials: 'include', headers })
+        .then((r) => r.text())
+        .then((txt) => {
+          if (!txt) return;
+          try {
+            ingestPersonListPayload(JSON.parse(txt));
+          } catch (err) {
+            console.warn('[SMAX] Legacy people fetch failed to parse page:', err);
+          }
+        })
+        .catch((err) => console.warn('[SMAX] Legacy people fetch failed:', err));
+
+      return fetchPage(0).then(() => {
+        if (typeof peopleTotal !== 'number' || peopleTotal <= peopleCache.size) {
+          peopleLoadedOnce = true;
+          return;
+        }
+        const tasks = [];
+        for (let skip = pageSize; skip < peopleTotal; skip += pageSize) {
+          tasks.push(fetchPage(skip));
+        }
+        return Promise.all(tasks).then(() => {
+          peopleLoadedOnce = true;
+          console.log('[SMAX] Legacy people cache ready:', peopleCache.size, '/', peopleTotal);
+        });
+      });
+    };
+
+    const ensurePeopleLoaded = ({ force = false } = {}) => {
+      if (peopleLoadedOnce && !force) return peopleLoadPromise || Promise.resolve();
+      if (peopleLoadPromise) return peopleLoadPromise;
+      peopleLoadPromise = fetchPeoplePage(0)
+        .then((firstPage) => {
+          const total = typeof peopleTotal === 'number'
+            ? peopleTotal
+            : ((firstPage && firstPage.meta && firstPage.meta.total_count) || peopleCache.size);
+          const needed = typeof total === 'number' ? total : 0;
+          if (!needed || needed <= peopleCache.size) {
+            peopleLoadedOnce = true;
+            return;
+          }
+          const tasks = [];
+          for (let skip = basePeopleParams.size; skip < needed; skip += basePeopleParams.size) {
+            tasks.push(fetchPeoplePage(skip));
+          }
+          return Promise.all(tasks).then(() => {
+            peopleLoadedOnce = true;
+            console.log('[SMAX] People cache ready:', peopleCache.size, '/', needed);
+          });
+        })
+        .catch((err) => {
+          console.warn('[SMAX] Failed to load people via API, falling back:', err);
+          return legacyFetchPeoplePages();
+        })
+        .finally(() => {
+          peopleLoadPromise = null;
+        });
+      return peopleLoadPromise;
+    };
+    const ensureSupportGroups = ({ force = false } = {}) => {
+      if (supportGroupsLoadedOnce && !force) return Promise.resolve(getSupportGroupsSnapshot());
+      if (supportGroupsLoadPromise) return supportGroupsLoadPromise;
+      supportGroupsLoadPromise = fetchSupportGroupPage(0)
+        .then((firstPage) => {
+          const total = typeof supportGroupTotal === 'number'
+            ? supportGroupTotal
+            : ((firstPage && firstPage.meta && firstPage.meta.total_count) || supportGroupMap.size);
+          if (!total || total <= supportGroupMap.size) {
+            supportGroupsLoadedOnce = true;
+            return getSupportGroupsSnapshot();
+          }
+          const tasks = [];
+          for (let skip = supportGroupBaseParams.size; skip < total; skip += supportGroupBaseParams.size) {
+            tasks.push(fetchSupportGroupPage(skip));
+          }
+          return Promise.all(tasks).then(() => getSupportGroupsSnapshot());
+        })
+        .catch((err) => {
+          console.warn('[SMAX] Failed to load support groups via API:', err);
+          return getSupportGroupsSnapshot();
+        })
+        .finally(() => {
+          supportGroupsLoadPromise = null;
+          supportGroupsLoadedOnce = true;
+        });
+      return supportGroupsLoadPromise;
+    };
+
+    const ensureRequestPayload = (id, { force = false, layout = 'FULL_LAYOUT,RELATION_LAYOUT.item' } = {}) => {
       const key = String(id || '').replace(/\D/g, '') || String(id || '');
       if (!key) return Promise.resolve(null);
       const cachedValue = () => triageCache.get(key) || null;
       if (!force && triageCache.has(key)) return Promise.resolve(cachedValue());
 
-      try {
-        const xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-        const xsrfToken = xsrfMatch ? decodeURIComponent(xsrfMatch[1]) : null;
-        const headers = { Accept: 'application/json, text/plain, */*', 'X-Requested-With': 'XMLHttpRequest' };
-        if (xsrfToken) headers['X-XSRF-TOKEN'] = xsrfToken;
-        const url = `/rest/213963628/ems/Request/${encodeURIComponent(key)}?layout=FULL_LAYOUT,RELATION_LAYOUT.item`;
-        return fetch(url, { method: 'GET', credentials: 'include', headers })
-          .then((r) => {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.text();
-          })
-          .then((txt) => {
-            if (!txt) return cachedValue();
-            try {
-              const parsed = JSON.parse(txt);
-              const entities = Array.isArray(parsed.entities) ? parsed.entities : [];
-              if (!entities.length) return cachedValue();
-              const ent = entities[0] || {};
-              upsertTriageEntryFromProps(ent.properties || {}, ent.related_properties || {});
-              return cachedValue();
-            } catch {
-              return cachedValue();
-            }
-          })
-          .catch(() => cachedValue());
-      } catch (err) {
-        console.warn('[SMAX] Failed to ensure triage payload:', err);
-        return Promise.resolve(cachedValue());
-      }
+      return ApiClient.request(`ems/Request/${encodeURIComponent(key)}`, {
+        method: 'GET',
+        searchParams: layout ? { layout } : undefined,
+        includeTenantParam: true
+      })
+        .then((payload) => {
+          ingestRequestDetailPayload(payload);
+          return cachedValue();
+        })
+        .catch((err) => {
+          console.warn('[SMAX] Failed to ensure triage payload:', err);
+          return cachedValue();
+        });
+    };
+
+    const defaultQueueParams = {
+      layout: [
+        'Id',
+        'Description',
+        'CreateTime',
+        'Priority',
+        'Solution',
+        'Comments.item',
+        'RequestedForPerson.item',
+        'RequestedForDisplayLabel',
+        'RequestedForName',
+        'AssignmentGroupDisplayLabel',
+        'AssignmentGroup'
+      ].join(','),
+      order: 'CreateTime desc',
+      size: 50,
+      skip: 0
+    };
+
+    const refreshQueueFromApi = (params = {}) => {
+      const searchParams = toQueryParams(defaultQueueParams, params);
+      return ApiClient.request('ems/Request', {
+        method: 'GET',
+        searchParams,
+        includeTenantParam: true
+      })
+        .then((payload) => {
+          ingestRequestListPayload(payload);
+          return payload;
+        })
+        .catch((err) => {
+          console.warn('[SMAX] Failed to refresh queue via API:', err);
+          throw err;
+        });
     };
 
     const updateCachedSolution = (id, html) => {
@@ -882,17 +1450,26 @@
       ingestRequestListPayload,
       ingestPersonListPayload,
       ensurePeopleLoaded,
+      ensureSupportGroups,
       ensureRequestPayload,
+      refreshQueueFromApi,
       upsertTriageEntryFromProps,
       ingestRequestDetailPayload,
       updateCachedSolution,
+      ingestSupportGroupPayload,
+      getSupportGroupsSnapshot,
       onQueueUpdate: (fn) => {
         if (typeof fn === 'function') queueListeners.add(fn);
       },
       onPeopleUpdate: (fn) => {
-        if (typeof fn !== 'function') return () => {};
+        if (typeof fn !== 'function') return () => { };
         peopleListeners.add(fn);
         return () => peopleListeners.delete(fn);
+      },
+      onSupportGroupsUpdate: (fn) => {
+        if (typeof fn !== 'function') return () => { };
+        supportGroupListeners.add(fn);
+        return () => supportGroupListeners.delete(fn);
       }
     };
   })();
@@ -983,14 +1560,14 @@
         const origOpen = XMLHttpRequest.prototype.open;
         const origSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.open = function patchedOpen(method, url, ...rest) {
-          try { this.__smaxUrl = url; } catch {}
+          try { this.__smaxUrl = url; } catch { }
           return origOpen.call(this, method, url, ...rest);
         };
         XMLHttpRequest.prototype.send = function patchedSend(body) {
           this.addEventListener('load', function onLoad() {
             try {
               const url = this.__smaxUrl || this.responseURL || '';
-              if (!/\/rest\/\d+\/ems\/(Request|Person)/i.test(url)) return;
+              if (!/\/rest\/\d+\/ems\/(Request|Person|PersonGroup)/i.test(url)) return;
               if (!this.responseText) return;
               const json = JSON.parse(this.responseText);
               if (isRequestListUrl(url)) {
@@ -999,8 +1576,10 @@
                 DataRepository.ingestRequestDetailPayload(json);
               } else if (/\/rest\/\d+\/ems\/Person/i.test(url)) {
                 DataRepository.ingestPersonListPayload(json);
+              } else if (/\/rest\/\d+\/ems\/PersonGroup/i.test(url)) {
+                DataRepository.ingestSupportGroupPayload(json);
               }
-            } catch {}
+            } catch { }
           });
           return origSend.call(this, body);
         };
@@ -1011,7 +1590,7 @@
             return origFetch(input, init).then((resp) => {
               try {
                 const url = resp.url || (typeof input === 'string' ? input : '');
-                if (!/\/rest\/\d+\/ems\/(Request|Person)/i.test(url)) return resp;
+                if (!/\/rest\/\d+\/ems\/(Request|Person|PersonGroup)/i.test(url)) return resp;
                 const clone = resp.clone();
                 clone.text().then((txt) => {
                   try {
@@ -1023,10 +1602,12 @@
                       DataRepository.ingestRequestDetailPayload(json);
                     } else if (/\/rest\/\d+\/ems\/Person/i.test(url)) {
                       DataRepository.ingestPersonListPayload(json);
+                    } else if (/\/rest\/\d+\/ems\/PersonGroup/i.test(url)) {
+                      DataRepository.ingestSupportGroupPayload(json);
                     }
-                  } catch {}
+                  } catch { }
                 });
-              } catch {}
+              } catch { }
               return resp;
             });
           };
@@ -1045,18 +1626,6 @@
    * API helpers for real updates
    * =======================================================*/
   const Api = (() => {
-    const withXsrfHeaders = () => {
-      const xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-      const xsrfToken = xsrfMatch ? decodeURIComponent(xsrfMatch[1]) : null;
-      const headers = {
-        Accept: 'application/json, text/plain, */*',
-        'Content-Type': 'application/json;charset=utf-8',
-        'X-Requested-With': 'XMLHttpRequest'
-      };
-      if (xsrfToken) headers['X-XSRF-TOKEN'] = xsrfToken;
-      return headers;
-    };
-
     const postUpdateRequest = (props) => {
       if (!prefs.enableRealWrites) {
         console.warn('[SMAX] Real writes disabled.');
@@ -1070,19 +1639,7 @@
         entities: [{ entity_type: 'Request', properties: { ...props } }],
         operation: 'UPDATE'
       };
-      return fetch('/rest/213963628/ems/bulk', {
-        method: 'POST',
-        credentials: 'include',
-        headers: withXsrfHeaders(),
-        body: JSON.stringify(body)
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.text();
-        })
-        .then((txt) => {
-          try { return txt ? JSON.parse(txt) : null; } catch { return null; }
-        })
+      return ApiClient.ems.bulk(body)
         .catch((err) => {
           console.warn('[SMAX] postUpdateRequest failed:', err);
           return null;
@@ -1108,19 +1665,7 @@
         }],
         operation: 'CREATE'
       };
-      return fetch('/rest/213963628/ems/bulk', {
-        method: 'POST',
-        credentials: 'include',
-        headers: withXsrfHeaders(),
-        body: JSON.stringify(body)
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.text();
-        })
-        .then((txt) => {
-          try { return txt ? JSON.parse(txt) : null; } catch { return null; }
-        })
+      return ApiClient.ems.bulk(body)
         .catch((err) => {
           console.warn('[SMAX] postCreateRequestCausesRequest failed:', err);
           return null;
@@ -1734,9 +2279,48 @@
         </div>
 
         <div id="smax-team-list">${buildNameRows()}</div>
+
+        <div id="smax-activity-log-panel">
+          <h4>📊 Registro de Atividades</h4>
+          <div class="smax-log-stats">
+            <span id="smax-log-count">${ActivityLog.getCount()}</span> entradas registradas
+          </div>
+          <div class="smax-log-actions">
+            <button type="button" class="smax-log-btn smax-log-btn-primary" id="smax-log-export-all" title="Exportar todo o log">📥 Exportar CSV</button>
+            <button type="button" class="smax-log-btn" id="smax-log-export-7d" title="Exportar últimos 7 dias">Últimos 7 dias</button>
+            <button type="button" class="smax-log-btn smax-log-btn-danger" id="smax-log-clear" title="Limpar todo o log">🗑️ Limpar</button>
+          </div>
+        </div>
       `;
       wirePanelEvents();
       refreshSelfSelectOptions();
+      wireLogPanelEvents();
+    };
+
+    const wireLogPanelEvents = () => {
+      if (!container) return;
+      const exportAllBtn = container.querySelector('#smax-log-export-all');
+      const export7dBtn = container.querySelector('#smax-log-export-7d');
+      const clearBtn = container.querySelector('#smax-log-clear');
+      const countEl = container.querySelector('#smax-log-count');
+
+      const refreshLogCount = () => {
+        if (countEl) countEl.textContent = String(ActivityLog.getCount());
+      };
+
+      if (exportAllBtn) {
+        exportAllBtn.addEventListener('click', () => ActivityLog.exportCsv());
+      }
+      if (export7dBtn) {
+        export7dBtn.addEventListener('click', () => ActivityLog.exportCsv(7));
+      }
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          if (ActivityLog.clear()) {
+            refreshLogCount();
+          }
+        });
+      }
     };
 
     const refreshSelfSelectOptions = () => {
@@ -2082,7 +2666,7 @@
   const SkullFlag = (() => {
     const normalize = (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
     const FLAG_SET = new Set([
-      'Adriano Zilli','Adriana Da Silva Ferreira Oliveira','Alessandra Sousa Nunes','Bruna Marques Dos Santos','Breno Medeiros Malfati','Carlos Henrique Scala De Almeida','Cassia Santos Alves De Lima','Dalete Rodrigues Silva','David Lopes De Oliveira','Davi Dos Reis Garcia','Deaulas De Campos Salviano','Diego Oliveira Da Silva','Diogo Mendonça Aniceto','Elaine Moriya','Ester Naili Dos Santos','Fabiano Barbosa Dos Reis','Fabricio Christiano Tanobe Lyra','Gabriel Teixeira Ludvig','Gilberto Sintoni Junior','Giovanna Coradini Teixeira','Gislene Ferreira Sant\'Ana Ramos','Guilherme Cesar De Sousa','Gustavo De Meira Gonçalves','Jackson Alcantara Santana','Janaina Dos Passos Silvestre','Jefferson Silva De Carvalho Soares','Joyce Da Silva Oliveira','Juan Campos De Souza','Juliana Lino Dos Santos Rosa','Karina Nicolau Samaan','Karine Barbara Vitor De Lima Souza','Kaue Nunes Silva Farrelly','Kelly Ferreira De Freitas','Larissa Ferreira Fumero','Lucas Alves Dos Santos','Lucas Carneiro Peres Ferreira','Marcos Paulo Silva Madalena','Maria Fernanda De Oliveira Bento','Natalia Yurie Shiba','Paulo Roberto Massoca','Pedro Henrique Palacio Baritti','Rafaella Silva Lima Petrolini','Renata Aparecida Mendes Bonvechio','Rodrigo Silva Oliveira','Ryan Souza Carvalho','Tatiana Lourenço Da Costa Antunes','Tatiane Araujo Da Cruz','Thiago Tadeu Faustino De Oliveira','Tiago Carvalho De Freitas Meneses','Victor Viana Roca'
+      'Adriano Zilli', 'Adriana Da Silva Ferreira Oliveira', 'Alessandra Sousa Nunes', 'Bruna Marques Dos Santos', 'Breno Medeiros Malfati', 'Carlos Henrique Scala De Almeida', 'Cassia Santos Alves De Lima', 'Dalete Rodrigues Silva', 'David Lopes De Oliveira', 'Davi Dos Reis Garcia', 'Deaulas De Campos Salviano', 'Diego Oliveira Da Silva', 'Diogo Mendonça Aniceto', 'Elaine Moriya', 'Ester Naili Dos Santos', 'Fabiano Barbosa Dos Reis', 'Fabricio Christiano Tanobe Lyra', 'Gabriel Teixeira Ludvig', 'Gilberto Sintoni Junior', 'Giovanna Coradini Teixeira', 'Gislene Ferreira Sant\'Ana Ramos', 'Guilherme Cesar De Sousa', 'Gustavo De Meira Gonçalves', 'Jackson Alcantara Santana', 'Janaina Dos Passos Silvestre', 'Jefferson Silva De Carvalho Soares', 'Joyce Da Silva Oliveira', 'Juan Campos De Souza', 'Juliana Lino Dos Santos Rosa', 'Karina Nicolau Samaan', 'Karine Barbara Vitor De Lima Souza', 'Kaue Nunes Silva Farrelly', 'Kelly Ferreira De Freitas', 'Larissa Ferreira Fumero', 'Lucas Alves Dos Santos', 'Lucas Carneiro Peres Ferreira', 'Marcos Paulo Silva Madalena', 'Maria Fernanda De Oliveira Bento', 'Natalia Yurie Shiba', 'Paulo Roberto Massoca', 'Pedro Henrique Palacio Baritti', 'Rafaella Silva Lima Petrolini', 'Renata Aparecida Mendes Bonvechio', 'Rodrigo Silva Oliveira', 'Ryan Souza Carvalho', 'Tatiana Lourenço Da Costa Antunes', 'Tatiane Araujo Da Cruz', 'Thiago Tadeu Faustino De Oliveira', 'Tiago Carvalho De Freitas Meneses', 'Victor Viana Roca'
     ].map(normalize));
 
     const apply = (personItem) => {
@@ -2104,7 +2688,7 @@
           Object.assign(img.style, { border: '3px solid #ff0000', borderRadius: '50%', padding: '2px', backgroundColor: '#ff000022', boxShadow: '0 0 10px #ff0000' });
         }
         personItem.style.color = '#ff0000';
-      } catch {}
+      } catch { }
     };
 
     const init = () => {
@@ -2171,7 +2755,16 @@
     let backdrop;
     let triageQueue = [];
     let triageIndex = -1;
-    const stagedState = { urgency: null, assign: false, parentId: '', parentSelected: false };
+    const stagedState = {
+      urgency: null,
+      assign: false,
+      assignPersonId: '',
+      parentId: '',
+      parentSelected: false,
+      assignmentGroupId: '',
+      assignmentGroupName: '',
+      assignmentGroupSelected: false
+    };
     let quickReplyHtml = '';
     let quickReplyEditor = null;
     let quickReplyEditorAttempts = 0;
@@ -2189,8 +2782,64 @@
     let attachmentsFetchSeq = 0;
     let currentAttachmentList = [];
     const inlineAttachmentHints = new Map();
+    let queueSyncPromise = null;
+    let supportGroupOptions = DataRepository.getSupportGroupsSnapshot ? DataRepository.getSupportGroupsSnapshot() : [];
+    let supportGroupLoading = false;
+    let supportGroupError = '';
+    let currentAssignmentGroupId = '';
+    let currentAssignmentGroupName = '';
+    let supportGroupFilter = '';
+    let gseDropdownOpen = false;
+    let gseOutsideHandler = null;
+
+    const normalizeSupportGroupText = (value) => (value || '')
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    const getSupportGroupFilterTokens = () => {
+      const normalized = normalizeSupportGroupText(supportGroupFilter).trim();
+      if (!normalized) return [];
+      return normalized.split(/\s+/).filter(Boolean);
+    };
+
+    const filterSupportGroupOptions = (tokens = getSupportGroupFilterTokens()) => {
+      const source = Array.isArray(supportGroupOptions) ? supportGroupOptions : [];
+      if (!tokens.length) return source.slice();
+      return source.filter((group) => {
+        if (!group) return false;
+        const haystack = normalizeSupportGroupText(`${group.name || ''} ${group.id || ''}`);
+        return tokens.every((token) => haystack.includes(token));
+      });
+    };
+
+    const resolveSupportGroupLabel = (groupId) => {
+      if (!groupId) return '';
+      if (stagedState.assignmentGroupSelected && stagedState.assignmentGroupId === groupId && stagedState.assignmentGroupName) {
+        return stagedState.assignmentGroupName;
+      }
+      if (currentAssignmentGroupId === groupId && currentAssignmentGroupName) {
+        return currentAssignmentGroupName;
+      }
+      const list = Array.isArray(supportGroupOptions) ? supportGroupOptions : [];
+      const match = list.find((group) => group && group.id === groupId);
+      return match ? (match.name || '') : '';
+    };
 
     DataRepository.onQueueUpdate(() => inlineAttachmentHints.clear());
+    DataRepository.onPeopleUpdate(() => {
+      if (!backdrop || backdrop.style.display !== 'flex') return;
+      refreshButtons();
+    });
+    if (typeof DataRepository.onSupportGroupsUpdate === 'function') {
+      DataRepository.onSupportGroupsUpdate((list) => {
+        supportGroupOptions = Array.isArray(list) ? list : [];
+        supportGroupLoading = false;
+        supportGroupError = '';
+        refreshGseSelect();
+      });
+    }
 
     const parseHtmlForAttachmentRefs = (html, hints) => {
       if (!html || !hints) return;
@@ -2208,7 +2857,7 @@
           const parsed = new URL(absolute, window.location.origin);
           const param = parsed.searchParams.get('attachmentId');
           if (param) ids.add(param.replace(/^Attachment:/i, ''));
-        } catch {}
+        } catch { }
         ids.forEach((rawId) => {
           const clean = Utils.normalizeAttachmentId(rawId);
           if (!clean) return;
@@ -2386,6 +3035,185 @@
         </button>
       `).join('');
       if (row) row.dataset.empty = 'false';
+    };
+    const currentGseSelectValue = () => (stagedState.assignmentGroupSelected ? stagedState.assignmentGroupId : currentAssignmentGroupId || '');
+    const refreshGseSelect = () => {
+      if (!backdrop) return;
+      const wrapper = backdrop.querySelector('#smax-triage-gse-wrapper');
+      const displayBtn = backdrop.querySelector('#smax-triage-gse-display');
+      const labelEl = backdrop.querySelector('#smax-triage-gse-display-label');
+      const dropdown = backdrop.querySelector('#smax-triage-gse-dropdown');
+      const optionsEl = backdrop.querySelector('#smax-triage-gse-options');
+      const emptyEl = backdrop.querySelector('#smax-triage-gse-empty');
+      const filterInput = backdrop.querySelector('#smax-triage-gse-filter');
+      if (!wrapper || !displayBtn || !labelEl || !dropdown || !optionsEl || !emptyEl || !filterInput) return;
+      if (filterInput.value !== supportGroupFilter) filterInput.value = supportGroupFilter;
+
+      const activeValue = currentGseSelectValue();
+      const filterTokens = getSupportGroupFilterTokens();
+      const filteredOptions = filterSupportGroupOptions(filterTokens);
+      const isFiltering = filterTokens.length > 0;
+      let renderList = filteredOptions.slice();
+
+      if (activeValue) {
+        const exists = renderList.some((group) => group && group.id === activeValue);
+        if (!exists) {
+          const fallbackLabel = resolveSupportGroupLabel(activeValue) || 'GSE selecionado';
+          renderList.unshift({ id: activeValue, name: fallbackLabel, forced: isFiltering });
+        }
+      }
+
+      if (renderList.length || activeValue) {
+        const clearLabel = activeValue ? 'Remover seleção (padrão)' : 'Selecionar GSE...';
+        renderList.unshift({ id: '', name: clearLabel, ghost: true });
+      }
+
+      const fragments = [];
+      renderList.forEach((group) => {
+        if (!group || group.id == null) return;
+        const rawValue = String(group.id);
+        const value = rawValue.trim();
+        const label = group.name || (value ? `Grupo ${value}` : 'Sem GSE');
+        const active = value && activeValue && value === activeValue;
+        const forcedChip = group.forced && isFiltering ? '<span class="smax-triage-gse-chip">Selecionado</span>' : '';
+        fragments.push(`
+          <button type="button" role="option" class="smax-triage-gse-option" data-value="${Utils.escapeHtml(value)}" data-label="${Utils.escapeHtml(label)}" data-active="${active ? 'true' : 'false'}" data-ghost="${group.ghost ? 'true' : 'false'}">
+            <span class="smax-triage-gse-option-name">${Utils.escapeHtml(label)}</span>
+            ${forcedChip}
+          </button>
+        `);
+      });
+
+      const noOptions = !fragments.length;
+      if (noOptions) {
+        optionsEl.innerHTML = '';
+        optionsEl.dataset.empty = 'true';
+        emptyEl.style.display = 'block';
+        if (!supportGroupOptions.length && supportGroupLoading) emptyEl.textContent = 'Carregando GSEs...';
+        else if (supportGroupError) emptyEl.textContent = supportGroupError;
+        else if (isFiltering) emptyEl.textContent = 'Nenhum GSE corresponde ao filtro.';
+        else emptyEl.textContent = 'Nenhum GSE disponível.';
+      } else {
+        optionsEl.innerHTML = fragments.join('');
+        optionsEl.dataset.empty = 'false';
+        emptyEl.style.display = 'none';
+      }
+
+      let displayLabel = 'Selecionar GSE...';
+      if (activeValue) {
+        displayLabel = resolveSupportGroupLabel(activeValue) || `Grupo ${activeValue}`;
+      } else if (!renderList.length && supportGroupLoading) {
+        displayLabel = 'Carregando GSEs...';
+      }
+      labelEl.textContent = displayLabel;
+
+      const allowToggle = !(!supportGroupOptions.length && !activeValue && supportGroupLoading);
+      displayBtn.disabled = !allowToggle;
+      if (!allowToggle && gseDropdownOpen) closeGseDropdown();
+
+      if (wrapper) {
+        if (stagedState.assignmentGroupSelected) wrapper.dataset.state = 'staged';
+        else if (supportGroupLoading && !supportGroupOptions.length && !activeValue) wrapper.dataset.state = 'loading';
+        else if (activeValue) wrapper.dataset.state = 'ready';
+        else if (renderList.length) wrapper.dataset.state = 'ready';
+        else wrapper.dataset.state = 'empty';
+      }
+    };
+    const ensureSupportGroupsReady = () => {
+      if (supportGroupOptions.length || supportGroupLoading) return;
+      supportGroupLoading = true;
+      supportGroupError = '';
+      refreshGseSelect();
+      if (typeof DataRepository.ensureSupportGroups === 'function') {
+        DataRepository.ensureSupportGroups({ force: false })
+          .catch((err) => {
+            console.warn('[SMAX] Falha ao carregar lista de GSEs:', err);
+            supportGroupError = 'Falha ao carregar GSEs.';
+          })
+          .finally(() => {
+            supportGroupLoading = false;
+            refreshGseSelect();
+          });
+      }
+    };
+    const stageAssignmentGroup = (groupId, groupName) => {
+      const trimmedId = groupId ? String(groupId).trim() : '';
+      const trimmedName = groupName ? groupName.trim() : '';
+      if (trimmedId && trimmedId !== currentAssignmentGroupId) {
+        stagedState.assignmentGroupId = trimmedId;
+        stagedState.assignmentGroupName = trimmedName || (supportGroupOptions.find((g) => g.id === trimmedId)?.name) || '';
+        stagedState.assignmentGroupSelected = true;
+      } else {
+        stagedState.assignmentGroupId = '';
+        stagedState.assignmentGroupName = '';
+        stagedState.assignmentGroupSelected = false;
+      }
+      refreshGseSelect();
+      refreshButtons();
+      setBaselineStatus();
+    };
+    const handleGseOptionClick = (evt) => {
+      if (!backdrop) return;
+      const button = evt.target.closest('.smax-triage-gse-option');
+      if (!button) return;
+      const value = button.dataset.value || '';
+      const label = button.dataset.label || button.textContent.trim();
+      stageAssignmentGroup(value, label);
+      closeGseDropdown({ focusButton: true });
+    };
+    const handleGseFilterInput = () => {
+      if (!backdrop) return;
+      const input = backdrop.querySelector('#smax-triage-gse-filter');
+      if (!input) return;
+      if (input.value.length > 80) input.value = input.value.slice(0, 80);
+      supportGroupFilter = input.value;
+      refreshGseSelect();
+      ensureSupportGroupsReady();
+    };
+    const handleGseDropdownKeydown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeGseDropdown({ focusButton: true });
+      }
+    };
+    function closeGseDropdown({ focusButton = false } = {}) {
+      if (!backdrop) return;
+      const wrapper = backdrop.querySelector('#smax-triage-gse-wrapper');
+      const displayBtn = backdrop.querySelector('#smax-triage-gse-display');
+      if (wrapper) wrapper.dataset.open = 'false';
+      if (!gseDropdownOpen) return;
+      gseDropdownOpen = false;
+      if (gseOutsideHandler) {
+        document.removeEventListener('mousedown', gseOutsideHandler, true);
+        document.removeEventListener('touchstart', gseOutsideHandler, true);
+        gseOutsideHandler = null;
+      }
+      if (focusButton && displayBtn) displayBtn.focus();
+    }
+    function openGseDropdown() {
+      if (!backdrop || gseDropdownOpen) return;
+      const wrapper = backdrop.querySelector('#smax-triage-gse-wrapper');
+      const filterInput = backdrop.querySelector('#smax-triage-gse-filter');
+      if (!wrapper) return;
+      gseDropdownOpen = true;
+      wrapper.dataset.open = 'true';
+      if (!gseOutsideHandler) {
+        gseOutsideHandler = (evt) => {
+          if (!wrapper.contains(evt.target)) closeGseDropdown();
+        };
+        document.addEventListener('mousedown', gseOutsideHandler, true);
+        document.addEventListener('touchstart', gseOutsideHandler, true);
+      }
+      ensureSupportGroupsReady();
+      refreshGseSelect();
+      if (filterInput) {
+        filterInput.focus();
+        filterInput.select();
+      }
+    }
+    const toggleGseDropdown = () => {
+      if (gseDropdownOpen) closeGseDropdown();
+      else openGseDropdown();
     };
 
     const fetchAttachmentsForRequest = (requestId) => {
@@ -2704,7 +3532,7 @@
           if (/grid_header_Id$/i.test(aid)) idColIndex = idx;
           if (/grid_header_CreateTime$/i.test(aid)) createTimeColIndex = idx;
         });
-      } catch {}
+      } catch { }
 
       const rows = Array.from(viewport.querySelectorAll('.slick-row'));
       const queue = [];
@@ -2765,11 +3593,21 @@
     const resetStaged = () => {
       stagedState.urgency = null;
       stagedState.assign = false;
+      stagedState.assignPersonId = '';
       stagedState.parentId = '';
       stagedState.parentSelected = false;
+      stagedState.assignmentGroupId = '';
+      stagedState.assignmentGroupName = '';
+      stagedState.assignmentGroupSelected = false;
     };
 
-    const anyStaged = () => Boolean(stagedState.urgency || stagedState.assign || stagedState.parentSelected || hasUnsavedSolution());
+    const anyStaged = () => Boolean(
+      stagedState.urgency
+      || stagedState.assign
+      || stagedState.parentSelected
+      || stagedState.assignmentGroupSelected
+      || hasUnsavedSolution()
+    );
 
     const ownerForCurrent = () => {
       const item = currentItem();
@@ -2777,18 +3615,42 @@
       return Distribution.ownerForDigits(item.idText) || Distribution.ownerForDigits(item.idNum != null ? String(item.idNum) : '');
     };
 
+    const normalizePersonName = (value) => (value || '')
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+
+    const resolvePersonIdByName = (name) => {
+      const target = normalizePersonName(name);
+      if (!target) return '';
+      let resolved = '';
+      DataRepository.peopleCache.forEach((person) => {
+        if (resolved || !person) return;
+        const composite = [
+          person.name,
+          [person.firstName, person.lastName].filter(Boolean).join(' '),
+          person.DisplayLabel,
+          person.FullName
+        ].find((entry) => entry && normalizePersonName(entry) === target);
+        if (composite) resolved = String(person.id);
+      });
+      return resolved;
+    };
+
     const formatBrazilianDateTime = (ts, fallbackText) => {
       const options = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
       if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
         try {
           return new Date(ts).toLocaleString('pt-BR', options);
-        } catch {}
+        } catch { }
       }
       const parsed = Utils.parseSmaxDateTime(fallbackText || '');
       if (parsed) {
         try {
           return new Date(parsed).toLocaleString('pt-BR', options);
-        } catch {}
+        } catch { }
       }
       return fallbackText || 'Faltando na visão';
     };
@@ -2806,13 +3668,13 @@
       if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
         try {
           return new Date(ts).toLocaleString('pt-BR', options);
-        } catch {}
+        } catch { }
       }
       const parsed = Utils.parseSmaxDateTime(fallbackText || '');
       if (parsed) {
         try {
           return new Date(parsed).toLocaleString('pt-BR', options);
-        } catch {}
+        } catch { }
       }
       return fallbackText || 'Data desconhecida';
     };
@@ -2858,6 +3720,7 @@
 
     const render = () => {
       if (!backdrop) return;
+      closeGseDropdown();
       const ticketDetailsEl = backdrop.querySelector('#smax-triage-ticket-details');
       const discussionsEl = backdrop.querySelector('#smax-triage-discussions');
       const statusEl = backdrop.querySelector('#smax-triage-status');
@@ -2889,6 +3752,10 @@
         stagedState.assign = false;
         stagedState.parentId = '';
         stagedState.parentSelected = false;
+        currentAssignmentGroupId = '';
+        currentAssignmentGroupName = '';
+        stageAssignmentGroup('', '');
+        refreshGseSelect();
         if (assignPanel) {
           assignPanel.dataset.state = 'disabled';
           if (assignValue) assignValue.textContent = 'Sem dono configurado';
@@ -2912,6 +3779,10 @@
       activeTicketId = item ? item.idText : null;
       const pendingRequestId = activeTicketId;
       resetStaged();
+      currentAssignmentGroupId = '';
+      currentAssignmentGroupName = '';
+      stageAssignmentGroup('', '');
+      refreshGseSelect();
       if (inputGlobal) {
         inputGlobal.value = '';
         inputGlobal.dataset.state = 'inactive';
@@ -2956,6 +3827,10 @@
         if (!full.idText) missing.push('ID');
         if (!full.descriptionText && !full.subjectText) missing.push('Descrição');
         if (!full.createdText) missing.push('Hora de Criação');
+        currentAssignmentGroupId = full.assignmentGroupId || '';
+        currentAssignmentGroupName = full.assignmentGroupName || '';
+        stageAssignmentGroup('', '');
+        refreshGseSelect();
         const warning = missing.length
           ? `<div style="margin-bottom:6px;padding:6px 8px;border-radius:6px;background:#7f1d1d;color:#fee2e2;font-size:12px;">
                Aviso: faltam ${missing.join(', ')} na visão atual.
@@ -3031,13 +3906,26 @@
       const ownerFirstName = hasOwner ? (owner.trim().split(/\s+/)[0] || owner) : '';
       const assignDisplayName = ownerFirstName || owner || 'o dono configurado';
       const urgencySet = !!stagedState.urgency;
-      const readyForOwner = hasOwner && urgencySet && !quickReplyDirty;
+      const resolvedPersonId = hasOwner ? resolvePersonIdByName(owner) : '';
+      if (hasOwner) {
+        console.debug('[SMAX][Triagem] Owner mapping check', {
+          owner,
+          resolvedPersonId,
+          peopleCacheSize: DataRepository.peopleCache.size
+        });
+      }
+      stagedState.assignPersonId = resolvedPersonId;
+      const hasPerson = !!resolvedPersonId;
+      const readyForOwner = hasOwner && hasPerson && urgencySet && !quickReplyDirty;
       stagedState.assign = readyForOwner;
       if (assignPanel && assignValue) {
         assignPanel.title = hasOwner ? `Atribuir para ${owner}` : 'Sem dono configurado';
         if (!hasOwner) {
           assignPanel.dataset.state = 'disabled';
           assignValue.textContent = 'Sem dono configurado';
+        } else if (!hasPerson) {
+          assignPanel.dataset.state = 'pending';
+          assignValue.textContent = 'Carregando cadastro do dono...';
         } else if (quickReplyDirty) {
           assignPanel.dataset.state = 'pending';
           assignValue.textContent = 'Resposta em edição — aguardando envio';
@@ -3102,6 +3990,7 @@
       if (stagedState.urgency) stagedBits.push('urgência');
       if (stagedState.assign) stagedBits.push('atribuir');
       if (stagedState.parentSelected && stagedState.parentId) stagedBits.push('global');
+      if (stagedState.assignmentGroupSelected) stagedBits.push('GSE');
       if (hasUnsavedSolution()) stagedBits.push('resposta');
       const pending = stagedBits.length ? ` Pendências: ${stagedBits.join(', ')}.` : '';
       statusEl.textContent = `${position} de ${total}.${pending}`;
@@ -3176,23 +4065,24 @@
       let expertAssigneeId = '';
       if (props.Solution && prefs.myPersonId && !stagedState.assign) {
         expertAssigneeId = String(prefs.myPersonId).trim();
-      } else if (stagedState.assign) {
-        const ownerName = ownerForCurrent();
-        if (ownerName) {
-          const target = ownerName.toUpperCase();
-          for (const p of DataRepository.peopleCache.values()) {
-            if ((p.name || '').toUpperCase() === target) {
-              expertAssigneeId = String(p.id);
-              break;
-            }
-          }
-        }
+      } else if (stagedState.assign && stagedState.assignPersonId) {
+        expertAssigneeId = String(stagedState.assignPersonId);
+      } else if (stagedState.assign && !stagedState.assignPersonId) {
+        console.debug('[SMAX][Triagem] Staged assignment missing person id', {
+          owner: ownerForCurrent(),
+          peopleCacheSize: DataRepository.peopleCache.size
+        });
       }
 
-      if (expertAssigneeId) props.ExpertAssignee = expertAssigneeId;
+      if (expertAssigneeId) {
+        props.ExpertAssignee = expertAssigneeId;
+      }
+      if (stagedState.assignmentGroupSelected && stagedState.assignmentGroupId) {
+        props.ExpertGroup = stagedState.assignmentGroupId;
+      }
 
       const doGlobal = stagedState.parentSelected && stagedState.parentId;
-      if (!stagedState.urgency && !props.ExpertAssignee && !doGlobal && !props.Solution) {
+      if (!stagedState.urgency && !props.ExpertAssignee && !doGlobal && !props.Solution && !props.ExpertGroup) {
         setStatus('Nada para gravar.', 2500);
         return;
       }
@@ -3205,12 +4095,28 @@
 
       setStatus('Gravando alterações...');
       const tasks = [];
-      if (stagedState.urgency || props.ExpertAssignee || props.Solution) tasks.push(Api.postUpdateRequest(props));
+      if (stagedState.urgency || props.ExpertAssignee || props.Solution || props.ExpertGroup) tasks.push(Api.postUpdateRequest(props));
       if (doGlobal) {
         tasks.push(
           Api.postCreateRequestCausesRequest(stagedState.parentId, props.Id).then((relRes) => {
             if (!(relRes && relRes.meta && relRes.meta.completion_status === 'OK')) return relRes;
-            return Api.postUpdateRequest({ Id: props.Id, PhaseId: 'Escalate' });
+            // First update: set PhaseId and Status
+            return Api.postUpdateRequest({
+              Id: props.Id,
+              PhaseId: 'Escalate',
+              Status: 'RequestStatusSuspended'
+            }).then((firstUpdateRes) => {
+              // Wait a couple seconds for server routine to complete, then set StatusSCCDSMAX_c
+              // This prevents the server from overwriting it back to match the parent's status
+              return new Promise((resolve) => {
+                setTimeout(() => {
+                  Api.postUpdateRequest({
+                    Id: props.Id,
+                    StatusSCCDSMAX_c: 'AguardandoOutraEquipe_c'
+                  }).then(resolve).catch(() => resolve(firstUpdateRes));
+                }, 2000); // 2 second delay to let server routine complete
+              });
+            });
           })
         );
       }
@@ -3227,7 +4133,50 @@
             : 'SMAX recusou a gravação.';
           console.warn('[SMAX] Falha ao gravar alterações:', { results, outcomes });
           setStatus(`SMAX recusou a gravação: ${detailMessage}`, 4000);
+          // Log failed activity
+          // Derive assignedTo: if answering, always prioritize myPersonName
+          const logAssignedToFailed = props.Solution
+            ? (prefs.myPersonName || '')
+            : (props.ExpertAssignee ? (currentOwnerName || prefs.myPersonName || '') : '');
+          ActivityLog.log({
+            ticketId: props.Id,
+            assigned: !!props.ExpertAssignee,
+            assignedTo: logAssignedToFailed,
+            globalAssigned: !!doGlobal,
+            globalChangeId: doGlobal ? stagedState.parentId : '',
+            transferred: !!(stagedState.assignmentGroupSelected && stagedState.assignmentGroupId && stagedState.assignmentGroupId !== currentAssignmentGroupId),
+            transferredTo: (stagedState.assignmentGroupSelected && stagedState.assignmentGroupId !== currentAssignmentGroupId) ? stagedState.assignmentGroupName : '',
+            answered: !!props.Solution,
+            success: false
+          });
         } else {
+          // Capture transfer info BEFORE updating currentAssignmentGroupId
+          const originalGroupId = currentAssignmentGroupId;
+          const wasTransferred = stagedState.assignmentGroupSelected && stagedState.assignmentGroupId && stagedState.assignmentGroupId !== originalGroupId;
+          const transferTargetName = wasTransferred ? stagedState.assignmentGroupName : '';
+
+          if (props.ExpertGroup && stagedState.assignmentGroupSelected) {
+            currentAssignmentGroupId = stagedState.assignmentGroupId;
+            currentAssignmentGroupName = stagedState.assignmentGroupName || currentAssignmentGroupName;
+            stageAssignmentGroup('', '');
+            refreshGseSelect();
+          }
+          // Log successful activity
+          // Derive assignedTo: if answering, always prioritize myPersonName
+          const logAssignedTo = props.Solution
+            ? (prefs.myPersonName || '')
+            : (props.ExpertAssignee ? (currentOwnerName || prefs.myPersonName || '') : '');
+          ActivityLog.log({
+            ticketId: props.Id,
+            assigned: !!props.ExpertAssignee,
+            assignedTo: logAssignedTo,
+            globalAssigned: !!doGlobal,
+            globalChangeId: doGlobal ? stagedState.parentId : '',
+            transferred: wasTransferred,
+            transferredTo: transferTargetName,
+            answered: !!props.Solution,
+            success: true
+          });
           setStatus('Alterações gravadas com sucesso.', 2000);
           advanceQueue();
         }
@@ -3251,6 +4200,22 @@
         statusLockedUntil = 0;
         setBaselineStatus();
       }, duration);
+    };
+
+    const syncQueueFromApi = ({ force = false, announce = false } = {}) => {
+      if (queueSyncPromise && !force) return queueSyncPromise;
+      if (announce && backdrop && backdrop.style.display === 'flex') setStatus('Sincronizando fila com SMAX...', 4000);
+      queueSyncPromise = DataRepository.refreshQueueFromApi()
+        .catch((err) => {
+          console.warn('[SMAX] Falha ao sincronizar fila via API:', err);
+          if (announce && backdrop && backdrop.style.display === 'flex') setStatus('Não foi possível atualizar a fila.', 4000);
+          return null;
+        })
+        .finally(() => {
+          queueSyncPromise = null;
+          if (backdrop && backdrop.style.display === 'flex') rebuildQueueForPersonalFinals();
+        });
+      return queueSyncPromise;
     };
 
     const navigateQueue = (delta) => {
@@ -3298,10 +4263,12 @@
 
     const openHud = () => {
       DataRepository.ensurePeopleLoaded();
+      ensureSupportGroupsReady();
       if (startBtn) startBtn.style.display = 'none';
       backdrop.style.display = 'flex';
       const finalsInput = backdrop.querySelector('#smax-personal-finals-input');
       if (finalsInput) finalsInput.value = prefs.personalFinalsRaw || '';
+      syncQueueFromApi({ force: true, announce: true }).catch(() => { });
       const { list, selectedId } = buildQueue();
       triageQueue = list;
       if (!triageQueue.length) triageIndex = -1;
@@ -3319,6 +4286,7 @@
     const closeHud = () => {
       backdrop.style.display = 'none';
       if (startBtn) startBtn.style.display = 'block';
+      closeGseDropdown();
       hideQuickGuide();
     };
 
@@ -3345,12 +4313,24 @@
                   <span>Meus finais</span>
                   <input type="text" id="smax-personal-finals-input" placeholder="0-32,66-99" inputmode="numeric" autocomplete="off" />
                 </label>
+                <div id="smax-triage-gse-wrapper" data-state="loading" data-open="false" title="Grupo de suporte">
+                  <button type="button" id="smax-triage-gse-display" disabled>
+                    <span id="smax-triage-gse-display-label">Carregando GSEs...</span>
+                    <span class="smax-triage-gse-chevron">▾</span>
+                  </button>
+                  <div id="smax-triage-gse-dropdown" role="listbox" data-empty="true">
+                    <input type="text" id="smax-triage-gse-filter" placeholder="Filtrar GSE..." autocomplete="off" />
+                    <div class="smax-triage-gse-options" id="smax-triage-gse-options"></div>
+                    <div id="smax-triage-gse-empty">Nenhum GSE disponível.</div>
+                  </div>
+                </div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <span class="smax-triage-header-nav">
                   <button type="button" id="smax-triage-prev" disabled aria-label="Chamado anterior" title="Chamado anterior">&#x2039;</button>
                   <button type="button" id="smax-triage-next" disabled aria-label="Próximo chamado" title="Próximo chamado">&#x203A;</button>
                 </span>
+                <button type="button" class="smax-triage-secondary" id="smax-triage-refresh" title="Sincronizar fila">&#x21bb;</button>
                 <button type="button" id="smax-triage-guide-btn" title="Dicas rápidas">Guia Rápido</button>
                 <button type="button" class="smax-triage-secondary" id="smax-triage-close" title="Minimizar triagem">_</button>
               </div>
@@ -3429,6 +4409,8 @@
       const prevBtn = backdrop.querySelector('#smax-triage-prev');
       if (prevBtn) prevBtn.addEventListener('click', () => retreatQueue());
       backdrop.querySelector('#smax-triage-next').addEventListener('click', () => advanceQueue());
+      const refreshBtn = backdrop.querySelector('#smax-triage-refresh');
+      if (refreshBtn) refreshBtn.addEventListener('click', () => syncQueueFromApi({ force: true, announce: true }));
       backdrop.querySelector('#smax-triage-commit').addEventListener('click', () => commit());
       const quickTextarea = backdrop.querySelector('#smax-triage-quickreply-editor');
       if (quickTextarea) quickTextarea.addEventListener('input', () => {
@@ -3444,6 +4426,26 @@
           AttachmentService.preview(attachment);
         });
       }
+      const gseDisplay = backdrop.querySelector('#smax-triage-gse-display');
+      if (gseDisplay) {
+        gseDisplay.addEventListener('click', () => {
+          if (gseDisplay.disabled) return;
+          toggleGseDropdown();
+        });
+      }
+      const gseDropdown = backdrop.querySelector('#smax-triage-gse-dropdown');
+      if (gseDropdown) {
+        gseDropdown.addEventListener('click', handleGseOptionClick);
+        gseDropdown.addEventListener('keydown', handleGseDropdownKeydown);
+      }
+      const gseFilter = backdrop.querySelector('#smax-triage-gse-filter');
+      if (gseFilter) {
+        gseFilter.value = supportGroupFilter;
+        gseFilter.addEventListener('input', handleGseFilterInput);
+        gseFilter.addEventListener('focus', ensureSupportGroupsReady);
+      }
+      refreshGseSelect();
+      ensureSupportGroupsReady();
       const finalsInput = backdrop.querySelector('#smax-personal-finals-input');
       if (finalsInput) {
         finalsInput.value = prefs.personalFinalsRaw || '';
@@ -3469,6 +4471,11 @@
       scheduleQuickReplyEditor();
     };
 
+    DataRepository.onQueueUpdate(() => {
+      if (!backdrop || backdrop.style.display !== 'flex') return;
+      rebuildQueueForPersonalFinals();
+    });
+
     return { init };
   })();
 
@@ -3483,6 +4490,8 @@
     GridTracker.init();
     TriageHUD.init();
     SkullFlag.init();
+    DataRepository.refreshQueueFromApi().catch(() => { });
+    DataRepository.ensureSupportGroups().catch(() => { });
   };
 
   Utils.onDomReady(boot);
