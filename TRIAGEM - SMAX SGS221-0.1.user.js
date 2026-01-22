@@ -128,6 +128,7 @@
         transferred: !!data.transferred,
         transferredTo: data.transferredTo || '',
         answered: !!data.answered,
+        usedScript: !!data.usedScript,
         relevantWork: '',
         user: data.user || prefs.myPersonName || '',
         success: data.success !== false
@@ -167,7 +168,7 @@
         alert('Nenhuma entrada para exportar.');
         return;
       }
-      const headers = ['Data', 'Hora', 'Chamado', 'Trabalho Relevante', 'Atribuído Para', 'Global', 'Transferido Para', 'Respondido', 'Usuário', 'Sucesso'];
+      const headers = ['Data', 'Hora', 'Chamado', 'Trabalho Relevante', 'Atribuído Para', 'Global', 'Transferido Para', 'Respondido', 'Script Utilizado', 'Usuário', 'Sucesso'];
       const rows = toExport.map((e) => {
         const fullDate = formatDateBrazilian(e.ts);
         const [datePart, timePart] = fullDate.split(' ');
@@ -180,16 +181,130 @@
           e.globalChangeId,
           e.transferredTo,
           e.answered ? 'Sim' : 'Não',
+          e.usedScript ? 'Sim' : 'Não',
           e.user,
           e.success ? 'Sim' : 'Não'
         ].map(escapeCSV).join(',');
       });
-      const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n'); // BOM for Excel UTF-8
+      const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      triggerDownload(blob, 'triagem_log_padrao');
+    };
+
+    const exportSpreadsheetCsv = () => {
+      if (!entries.length) {
+        alert('Nenhuma entrada para exportar.');
+        return;
+      }
+      // Header: EQUIPE, NOME, DIA, TIPO DE ATIVIDADE, HOUVE NECESSIDADE DE TESTES EM HML?, UTILIZADO SCRIPT DE ATENDIMENTO?, FOI CRIADO NOVO SCRIPT PARA ESTE ATENDIMENTO?, ENCAMINHAMENTO PARA OUTRA EQUIPE, DURAÇÃO, DESCRIÇÃO / OBS
+      const headers = [
+        'EQUIPE',
+        'NOME',
+        'DIA',
+        'TIPO DE ATIVIDADE',
+        'HOUVE NECESSIDADE DE TESTES EM HML?',
+        'UTILIZADO SCRIPT DE ATENDIMENTO?',
+        'FOI CRIADO NOVO SCRIPT PARA ESTE ATENDIMENTO?',
+        'ENCAMINHAMENTO PARA OUTRA EQUIPE',
+        'DURAÇÃO',
+        'DESCRIÇÃO / OBS'
+      ];
+
+      const rows = entries.map((e) => {
+        // Hardcoded:
+        const equipe = 'INTERNO 1G';
+        const nome = 'DANIEL MACEDO CRUZ';
+        const tipoAtividade = 'ATENDIMENTO DE CHAMADO OFFLINE';
+        const hml = 'NÃO';
+        const duracao = 'ATÉ 15 MIN';
+        const novoScript = 'NÃO';
+
+        // Derived:
+        const fullDate = formatDateBrazilian(e.ts);
+        const dia = fullDate.split(' ')[0] || ''; // Just the date part dd/mm/yyyy
+
+        const utilizadoScript = e.usedScript ? 'SIM' : 'NÃO'; // Assuming logic provided implied 'SIM' if checked
+
+        // Encaminhamento logic
+        let encaminhamento = '';
+        if (e.transferred) {
+          if (e.transferredTo.includes('STI 1 SUPORTE N3')) encaminhamento = 'STI (N3)';
+          else if (e.transferredTo.includes('STI 5.3')) encaminhamento = 'STI MIGRAÇÃO (STI 5)';
+          else encaminhamento = ''; // "blank will be for every other case" - assuming 'other case' of transferred or general? 
+          // Re-reading: "blank will be for every other case" applies to the general logic.
+          // Wait, "ATENDIMENTO N2 (SEM ENCAMINHAMENTO)" is for every ticket that DIDN'T get transferred.
+        } else {
+          encaminhamento = 'ATENDIMENTO N2 (SEM ENCAMINHAMENTO)';
+        }
+
+        // Wait, user said:
+        // "ATENDIMENTO N2 (SEM ENCAMINHAMENTO)" is for every ticket that DIDN'T get transferred
+        // blank will be for every other case. 
+        // Logic refinement:
+        // If !transferred => 'ATENDIMENTO N2 (SEM ENCAMINHAMENTO)'
+        // If transferred:
+        //    If target is 'GSE - STI 1 SUPORTE N3_eproc' => 'STI (N3)'
+        //    If target is 'GSE - STI 5.3 - Migração eproc' => 'STI MIGRAÇÃO (STI 5)'
+        //    Else => '' (blank)
+
+        if (!e.transferred) {
+          encaminhamento = 'ATENDIMENTO N2 (SEM ENCAMINHAMENTO)';
+        } else {
+          const target = (e.transferredTo || '').toUpperCase();
+          if (target.includes('STI 1 SUPORTE N3') || target.includes('STI 1 SUPORTE N3_EPROC')) {
+            encaminhamento = 'STI (N3)';
+          } else if (target.includes('STI 5.3') || target.includes('STI 5') && target.includes('MIGRA')) {
+            encaminhamento = 'STI MIGRAÇÃO (STI 5)';
+          } else {
+            encaminhamento = '';
+          }
+        }
+
+        // Descrição logic
+        // "Chamado xxxxxxx respondido."
+        // "Chamado xxxxx transferido."
+        // "Chamado xxxxxx vinculado ao global xxxxxxx"
+        // "Chamado xxxxx designado a LUCAS BARRETO..."
+        // Priority defaults to relevantWork logic often, but let's stick to the specific strings requested.
+        let descricao = '';
+        const tid = e.ticketId;
+        if (e.relevantWork === 'RESPONDIDO') {
+          descricao = `Chamado ${tid} respondido.`;
+        } else if (e.relevantWork === 'TRANSFERIDO') {
+          descricao = `Chamado ${tid} transferido para ${e.transferredTo || 'GSE não identificado'}.`;
+        } else if (e.relevantWork === 'VINCULO_GLOBAL') {
+          descricao = `Chamado ${tid} vinculado ao global ${e.globalChangeId}`;
+        } else if (e.relevantWork === 'DESIGNADO') {
+          descricao = `Chamado ${tid} designado a ${e.assignedTo}`;
+        } else {
+          // Fallback if none matches (e.g. just saved?)
+          descricao = `Chamado ${tid} processado.`;
+        }
+
+        return [
+          equipe,
+          nome,
+          dia,
+          tipoAtividade,
+          hml,
+          utilizadoScript,
+          novoScript,
+          encaminhamento,
+          duracao,
+          descricao
+        ].map(escapeCSV).join(',');
+      });
+
+      const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      triggerDownload(blob, 'triagem_relatorio_atividade');
+    };
+
+    const triggerDownload = (blob, slug) => {
       const url = URL.createObjectURL(blob);
       const now = new Date();
       const pad = (n) => String(n).padStart(2, '0');
-      const filename = `triagem_log_${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`;
+      const filename = `${slug}_${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`;
       const link = document.createElement('a');
       link.href = url;
       link.download = filename;
@@ -197,7 +312,7 @@
       link.click();
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 2000);
-      console.log('[SMAX] Exported', toExport.length, 'log entries to', filename);
+      console.log('[SMAX] Exported CSV:', filename);
     };
 
     const clear = () => {
@@ -209,12 +324,11 @@
     };
 
     const getCount = () => entries.length;
-
     const getEntries = () => entries.slice();
 
     load();
 
-    return { log, exportCsv, clear, getCount, getEntries, load };
+    return { log, exportCsv, exportSpreadsheetCsv, clear, getCount, getEntries, load };
   })();
 
   /* =========================================================
@@ -229,6 +343,7 @@
     .comment-items { height: auto !important; max-height: none !important; }
 
     .smax-absent-wrapper { display:inline-flex; align-items:center; gap:4px; cursor:pointer; font-size:12px; white-space:nowrap; }
+    .smax-absent-input { display:none; }
     .smax-absent-box { width:14px; height:14px; border:1px solid #555; border-radius:2px; background:#fff; box-sizing:border-box; }
     .smax-absent-input:checked + .smax-absent-box { background:#d32f2f; border-color:#d32f2f; box-shadow:0 0 0 1px #d32f2f; }
 
@@ -2287,6 +2402,7 @@
           </div>
           <div class="smax-log-actions">
             <button type="button" class="smax-log-btn smax-log-btn-primary" id="smax-log-export-all" title="Exportar todo o log">📥 Exportar CSV</button>
+            <button type="button" class="smax-log-btn" id="smax-log-export-spreadsheet" title="Exportar relatório formatado">Relatório (Planilha)</button>
             <button type="button" class="smax-log-btn" id="smax-log-export-7d" title="Exportar últimos 7 dias">Últimos 7 dias</button>
             <button type="button" class="smax-log-btn smax-log-btn-danger" id="smax-log-clear" title="Limpar todo o log">🗑️ Limpar</button>
           </div>
@@ -2310,6 +2426,10 @@
 
       if (exportAllBtn) {
         exportAllBtn.addEventListener('click', () => ActivityLog.exportCsv());
+      }
+      const exportSpreadsheetBtn = container.querySelector('#smax-log-export-spreadsheet');
+      if (exportSpreadsheetBtn) {
+        exportSpreadsheetBtn.addEventListener('click', () => ActivityLog.exportSpreadsheetCsv());
       }
       if (export7dBtn) {
         export7dBtn.addEventListener('click', () => ActivityLog.exportCsv(7));
@@ -3599,6 +3719,8 @@
       stagedState.assignmentGroupId = '';
       stagedState.assignmentGroupName = '';
       stagedState.assignmentGroupSelected = false;
+      const ck = backdrop.querySelector('#smax-triage-used-script');
+      if (ck) ck.checked = false;
     };
 
     const anyStaged = () => Boolean(
@@ -4061,6 +4183,8 @@
         props.Solution = solutionHtml;
         props.CompletionCode = quickReplyCompletionCode;
       }
+      const usedScriptCheckbox = backdrop.querySelector('#smax-triage-used-script');
+      const usedScript = usedScriptCheckbox ? !!usedScriptCheckbox.checked : false;
 
       let expertAssigneeId = '';
       if (props.Solution && prefs.myPersonId && !stagedState.assign) {
@@ -4147,6 +4271,7 @@
             transferred: !!(stagedState.assignmentGroupSelected && stagedState.assignmentGroupId && stagedState.assignmentGroupId !== currentAssignmentGroupId),
             transferredTo: (stagedState.assignmentGroupSelected && stagedState.assignmentGroupId !== currentAssignmentGroupId) ? stagedState.assignmentGroupName : '',
             answered: !!props.Solution,
+            usedScript: usedScript,
             success: false
           });
         } else {
@@ -4175,6 +4300,7 @@
             transferred: wasTransferred,
             transferredTo: transferTargetName,
             answered: !!props.Solution,
+            usedScript: usedScript,
             success: true
           });
           setStatus('Alterações gravadas com sucesso.', 2000);
@@ -4380,6 +4506,11 @@
                 <div class="smax-triage-main-actions">
                   <div id="smax-triage-real-flag" style="font-size:11px;font-weight:600;color:#f97316;display:none;">MODO REAL ATIVO</div>
                   <div class="smax-triage-main-actions-buttons">
+                    <label class="smax-absent-wrapper" style="font-size:11px;color:#cbd5f5;margin-right:8px;" title="Marque se utilizou um script padrão para este atendimento">
+                      <input type="checkbox" id="smax-triage-used-script" class="smax-absent-input">
+                      <span class="smax-absent-box"></span>
+                      Script utilizado?
+                    </label>
                     <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>ENVIAR</button>
                   </div>
                 </div>
