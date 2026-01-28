@@ -294,49 +294,56 @@
                 step: queue.currentStep,
                 case: currentCase,
                 onInconsistenciasPage,
-                onDesativarPage
+                onDesativarPage,
+                awaitingDesativar: queue.awaitingDesativar
             });
 
-            // After desativar action, go back to consultar
+            // Only process on known pages - bail out on any other page
+            if (!onInconsistenciasPage && !onDesativarPage) {
+                console.log('[Inconsistencias] Unknown page, ignoring queue');
+                return false;
+            }
+
+            // On desativar result page - count the removal and go back
             if (onDesativarPage) {
-                // Increment removed count
                 if (!queue.results[currentCase]) {
                     queue.results[currentCase] = { removed: 0, status: ResultType.PENDING };
                 }
                 queue.results[currentCase].removed++;
                 queue.removedCount++;
                 queue.currentStep = 'consultar';
+                queue.awaitingDesativar = false;
                 Storage.saveQueue(queue);
 
-                // Redirect back with case number to re-check
-                window.location.href = CONFIG.INCONSISTENCIAS_URL;
-                return true;
-            }
-
-            // On inconsistencias page
-            if (onInconsistenciasPage) {
-                if (queue.currentStep === 'consultar') {
-                    // Need to enter the case number and search
-                    this.doConsultar(queue, currentCase);
-                } else if (queue.currentStep === 'fixing') {
-                    // Check for more duplicates
-                    this.checkAndFix(queue, currentCase);
+                // Click Voltar button
+                console.log('[Inconsistencias] Desativar done, clicking Voltar...');
+                const voltarBtn = document.querySelector('button.btn-secondary');
+                if (voltarBtn && voltarBtn.textContent.includes('Voltar')) {
+                    voltarBtn.click();
+                } else {
+                    window.history.back();
                 }
                 return true;
             }
 
-            return false;
+            // On inconsistencias page - continue automation
+            if (queue.currentStep === 'consultar') {
+                this.doConsultar(queue, currentCase);
+            } else if (queue.currentStep === 'fixing') {
+                this.checkAndFix(queue, currentCase);
+            }
+            return true;
         },
 
         doConsultar(queue, caseNumber) {
             const input = document.getElementById('NumProcesso');
             if (!input) {
-                console.error('[Inconsistencias] Input not found');
+                console.error('[Inconsistencias] Input not found, reloading...');
+                window.location.reload();
                 return;
             }
 
             input.value = caseNumber;
-            // Trigger input event to activate formatting
             input.dispatchEvent(new Event('input', { bubbles: true }));
 
             queue.currentStep = 'fixing';
@@ -347,6 +354,9 @@
                 if (button && button.textContent.includes('Consultar')) {
                     console.log('[Inconsistencias] Clicking Consultar for:', caseNumber);
                     button.click();
+                } else {
+                    console.error('[Inconsistencias] Button not found, reloading...');
+                    window.location.reload();
                 }
             }, CONFIG.ACTION_DELAY_MS);
         },
@@ -356,66 +366,101 @@
             setTimeout(() => {
                 const analysis = analyzeDuplicates();
 
+                // Preserve the removed count from previous iterations
                 if (!queue.results[caseNumber]) {
                     queue.results[caseNumber] = { removed: 0, status: ResultType.PENDING };
                 }
+                const result = queue.results[caseNumber];
+
+                // Check if there's a red banner indicating duplicates exist
+                const hasRedBanner = !analysis.allGreen;
 
                 if (analysis.hasDuplicates) {
                     // Find and click a desativar link
+                    let foundDesativar = false;
                     for (const card of analysis.duplicateCards) {
                         const toRemove = findRowToRemove(card.rows);
                         if (toRemove) {
                             console.log('[Inconsistencias] Removing duplicate:', toRemove);
+                            queue.awaitingDesativar = true;
                             Storage.saveQueue(queue);
 
-                            // Click the desativar link immediately
+                            // Click the desativar link
                             toRemove.link.click();
+                            foundDesativar = true;
                             return;
                         }
+                    }
+
+                    // Duplicates detected but no desativar link found - can't fix automatically
+                    if (!foundDesativar) {
+                        console.log('[Inconsistencias] Duplicates found but no desativar link available');
+                        if (result.removed > 0) {
+                            result.status = ResultType.FIXED;
+                            result.message = `${result.removed} duplicata(s) removida(s) (ainda restam duplicatas sem link)`;
+                        } else {
+                            result.status = ResultType.ERROR;
+                            result.message = 'Duplicatas encontradas, mas sem botão desativar disponível';
+                        }
+                        this.finalizeCase(queue, caseNumber, result);
+                        return;
                     }
                 }
 
                 // No more duplicates to remove - finalize this case
-                const result = queue.results[caseNumber];
+                // Determine the correct status based on what actually happened
                 if (result.removed > 0) {
+                    // We actually removed duplicates - this is a success/fix
                     result.status = ResultType.FIXED;
                     result.message = `${result.removed} duplicata(s) removida(s)`;
-                } else if (analysis.allGreen) {
+                } else if (hasRedBanner) {
+                    // There's still a red banner but we couldn't find duplicates to remove
+                    result.status = ResultType.ERROR;
+                    result.message = 'Banner vermelho presente, mas não foi possível corrigir automaticamente';
+                } else {
+                    // All green - no duplicates were ever present
                     result.status = ResultType.OK;
                     result.message = 'Sem duplicatas';
-                } else {
-                    result.status = ResultType.ERROR;
-                    result.message = 'Problema não resolvível automaticamente';
                 }
 
-                // Log this case
-                Storage.addEntry({
-                    caseNumber: caseNumber,
-                    timestamp: Date.now(),
-                    status: result.status,
-                    message: result.message,
-                    removed: result.removed
-                });
-
-                // Move to next case
-                queue.currentIndex++;
-                queue.currentStep = 'consultar';
-
-                if (queue.currentIndex >= queue.cases.length) {
-                    // All done!
-                    Storage.clearQueue();
-                    console.log('[Inconsistencias] Batch complete!');
-                    return;
-                }
-
-                Storage.saveQueue(queue);
-
-                // Small delay before next case
-                setTimeout(() => {
-                    this.executeNext(queue);
-                }, 1000);
+                this.finalizeCase(queue, caseNumber, result);
 
             }, 500); // Wait for tables to load
+        },
+
+        finalizeCase(queue, caseNumber, result) {
+            // Log this case
+            console.log('[Inconsistencias] Finalizing case:', caseNumber, result);
+            Storage.addEntry({
+                caseNumber: caseNumber,
+                timestamp: Date.now(),
+                status: result.status,
+                message: result.message,
+                removed: result.removed || 0
+            });
+
+            // Move to next case
+            queue.currentIndex++;
+            queue.currentStep = 'consultar';
+
+            if (queue.currentIndex >= queue.cases.length) {
+                // All done!
+                Storage.clearQueue();
+                console.log('[Inconsistencias] Batch complete!');
+                return;
+            }
+
+            Storage.saveQueue(queue);
+
+            // Click Voltar to get fresh form for next case
+            console.log('[Inconsistencias] Case done, clicking Voltar for next...');
+            const voltarBtn = document.querySelector('button.btn-secondary');
+            if (voltarBtn && voltarBtn.textContent.includes('Voltar')) {
+                voltarBtn.click();
+            } else {
+                // Fallback: reload the page
+                window.location.reload();
+            }
         },
 
         executeNext(queue) {
