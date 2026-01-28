@@ -230,7 +230,7 @@
         if (e.transferred) {
           if (e.transferredTo.includes('STI 1 SUPORTE N3')) encaminhamento = 'STI (N3)';
           else if (e.transferredTo.includes('STI 5.3')) encaminhamento = 'STI MIGRAÇÃO (STI 5)';
-          else encaminhamento = ''; // "blank will be for every other case" - assuming 'other case' of transferred or general? 
+          else encaminhamento = ''; // "blank will be for every other case" - assuming 'other case' of transferred or general?
           // Re-reading: "blank will be for every other case" applies to the general logic.
           // Wait, "ATENDIMENTO N2 (SEM ENCAMINHAMENTO)" is for every ticket that DIDN'T get transferred.
         } else {
@@ -239,7 +239,7 @@
 
         // Wait, user said:
         // "ATENDIMENTO N2 (SEM ENCAMINHAMENTO)" is for every ticket that DIDN'T get transferred
-        // blank will be for every other case. 
+        // blank will be for every other case.
         // Logic refinement:
         // If !transferred => 'ATENDIMENTO N2 (SEM ENCAMINHAMENTO)'
         // If transferred:
