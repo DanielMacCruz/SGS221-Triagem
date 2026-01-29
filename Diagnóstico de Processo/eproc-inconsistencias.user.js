@@ -53,12 +53,6 @@
         return acao === 'ProcessoInconsistente/consultar';
     }
 
-    function isDesativarResultPage() {
-        const params = new URLSearchParams(window.location.search);
-        const acao = params.get('acao');
-        return acao === 'ProcessoInconsistente/desativarInformacaoAdicional';
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // STORAGE MODULE
     // ═══════════════════════════════════════════════════════════════════════════
@@ -125,6 +119,17 @@
         ERROR: 'error',        // Red - case not found or error
         PENDING: 'pending'     // Still processing
     };
+
+    // Helper: Click the Voltar button (uses the button's built-in onclick which has the correct URL with hash)
+    function clickVoltar() {
+        const btn = document.querySelector('button.btn-secondary');
+        if (btn && btn.textContent.includes('Voltar')) {
+            btn.click();
+        } else {
+            // Fallback: reload page
+            window.location.reload();
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // DUPLICATE DETECTOR
@@ -259,10 +264,13 @@
     // ═══════════════════════════════════════════════════════════════════════════
     const Automation = {
         parseInput(text) {
+            // Input is already filtered to digits + newlines
+            // Split by newlines, take 20-digit lines, format them
             return text
-                .split(/[\n,;]+/)
-                .map(line => line.trim().replace(/[^\d.-]/g, ''))
-                .filter(line => line.length >= 20);
+                .split(/\n/)
+                .map(line => line.trim())
+                .filter(line => line.length === 20)
+                .map(d => `${d.slice(0, 7)}-${d.slice(7, 9)}.${d.slice(9, 13)}.${d.slice(13, 14)}.${d.slice(14, 16)}.${d.slice(16, 20)}`);
         },
 
         startBatch(caseNumbers) {
@@ -286,47 +294,19 @@
             const queue = Storage.loadQueue();
             if (!queue) return false;
 
-            const onInconsistenciasPage = isInconsistenciasPage();
-            const onDesativarPage = isDesativarResultPage();
-            const currentCase = queue.cases[queue.currentIndex];
-
-            console.log('[Inconsistencias] Resuming...', {
-                step: queue.currentStep,
-                case: currentCase,
-                onInconsistenciasPage,
-                onDesativarPage,
-                awaitingDesativar: queue.awaitingDesativar
-            });
-
-            // Only process on known pages - bail out on any other page
-            if (!onInconsistenciasPage && !onDesativarPage) {
-                console.log('[Inconsistencias] Unknown page, ignoring queue');
+            // Only process on the inconsistencias page
+            if (!isInconsistenciasPage()) {
+                console.log('[Inconsistencias] Not on inconsistencias page, ignoring');
                 return false;
             }
 
-            // On desativar result page - count the removal and go back
-            if (onDesativarPage) {
-                if (!queue.results[currentCase]) {
-                    queue.results[currentCase] = { removed: 0, status: ResultType.PENDING };
-                }
-                queue.results[currentCase].removed++;
-                queue.removedCount++;
-                queue.currentStep = 'consultar';
-                queue.awaitingDesativar = false;
-                Storage.saveQueue(queue);
+            const currentCase = queue.cases[queue.currentIndex];
+            console.log('[Inconsistencias] Resuming...', {
+                step: queue.currentStep,
+                case: currentCase
+            });
 
-                // Click Voltar button
-                console.log('[Inconsistencias] Desativar done, clicking Voltar...');
-                const voltarBtn = document.querySelector('button.btn-secondary');
-                if (voltarBtn && voltarBtn.textContent.includes('Voltar')) {
-                    voltarBtn.click();
-                } else {
-                    window.history.back();
-                }
-                return true;
-            }
-
-            // On inconsistencias page - continue automation
+            // Execute based on current step
             if (queue.currentStep === 'consultar') {
                 this.doConsultar(queue, currentCase);
             } else if (queue.currentStep === 'fixing') {
@@ -377,34 +357,36 @@
 
                 if (analysis.hasDuplicates) {
                     // Find and click a desativar link
-                    let foundDesativar = false;
                     for (const card of analysis.duplicateCards) {
                         const toRemove = findRowToRemove(card.rows);
                         if (toRemove) {
                             console.log('[Inconsistencias] Removing duplicate:', toRemove);
-                            queue.awaitingDesativar = true;
+                            result.removed++;
+                            queue.removedCount++;
                             Storage.saveQueue(queue);
 
-                            // Click the desativar link
+                            // Click the desativar link (AJAX - no page reload)
                             toRemove.link.click();
-                            foundDesativar = true;
+
+                            // Wait for AJAX to complete, then re-check for more duplicates
+                            setTimeout(() => {
+                                this.checkAndFix(queue, caseNumber);
+                            }, 2000);
                             return;
                         }
                     }
 
                     // Duplicates detected but no desativar link found - can't fix automatically
-                    if (!foundDesativar) {
-                        console.log('[Inconsistencias] Duplicates found but no desativar link available');
-                        if (result.removed > 0) {
-                            result.status = ResultType.FIXED;
-                            result.message = `${result.removed} duplicata(s) removida(s) (ainda restam duplicatas sem link)`;
-                        } else {
-                            result.status = ResultType.ERROR;
-                            result.message = 'Duplicatas encontradas, mas sem botão desativar disponível';
-                        }
-                        this.finalizeCase(queue, caseNumber, result);
-                        return;
+                    console.log('[Inconsistencias] Duplicates found but no desativar link available');
+                    if (result.removed > 0) {
+                        result.status = ResultType.FIXED;
+                        result.message = `${result.removed} duplicata(s) removida(s) (ainda restam duplicatas sem link)`;
+                    } else {
+                        result.status = ResultType.ERROR;
+                        result.message = 'Duplicatas encontradas, mas sem botão desativar disponível';
                     }
+                    this.finalizeCase(queue, caseNumber, result);
+                    return;
                 }
 
                 // No more duplicates to remove - finalize this case
@@ -452,15 +434,9 @@
 
             Storage.saveQueue(queue);
 
-            // Click Voltar to get fresh form for next case
-            console.log('[Inconsistencias] Case done, clicking Voltar for next...');
-            const voltarBtn = document.querySelector('button.btn-secondary');
-            if (voltarBtn && voltarBtn.textContent.includes('Voltar')) {
-                voltarBtn.click();
-            } else {
-                // Fallback: reload the page
-                window.location.reload();
-            }
+            // Click Voltar for next case
+            console.log('[Inconsistencias] Case done, clicking Voltar for next case...');
+            clickVoltar();
         },
 
         executeNext(queue) {
@@ -707,6 +683,15 @@
         toggle.addEventListener('click', () => {
             body.classList.toggle('collapsed');
             toggle.textContent = body.classList.contains('collapsed') ? '+' : '−';
+        });
+
+        // Filter input: only digits and newlines allowed
+        input.addEventListener('input', () => {
+            const pos = input.selectionStart;
+            const before = input.value.length;
+            input.value = input.value.replace(/[^\d\n]/g, '');
+            const after = input.value.length;
+            input.selectionStart = input.selectionEnd = pos - (before - after);
         });
 
         // Render log
