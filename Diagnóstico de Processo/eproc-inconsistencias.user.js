@@ -333,7 +333,16 @@
                 const button = document.querySelector('button.btn-primary');
                 if (button && button.textContent.includes('Consultar')) {
                     console.log('[Inconsistencias] Clicking Consultar for:', caseNumber);
+                    if (window.eprocUpdateHUDStatus) window.eprocUpdateHUDStatus('🖱️ Consultando...');
+
                     button.click();
+
+                    // If the page reloads (submit), this timeout dies. 
+                    // If it's AJAX, we transition to fixing after a short delay to allow 'processing' to appear
+                    setTimeout(() => {
+                        this.checkAndFix(queue, caseNumber);
+                    }, 1000);
+
                 } else {
                     console.error('[Inconsistencias] Button not found, reloading...');
                     window.location.reload();
@@ -341,9 +350,47 @@
             }, CONFIG.ACTION_DELAY_MS);
         },
 
+        waitForTableLoad(callback, attempt = 0) {
+            // Update HUD status lightly if possible
+            if (window.eprocUpdateHUDStatus && attempt % 5 === 0) {
+                window.eprocUpdateHUDStatus(`⏳ Aguardando tabela... (${attempt})`);
+            }
+
+            // check for processing indicator
+            const processing = document.querySelector('.dataTables_processing');
+            const isProcessing = processing && processing.style.display !== 'none';
+
+            // check for headers (basic page structure)
+            const headers = document.querySelectorAll('.card-header');
+            const hasHeaders = headers.length > 0;
+
+            // check for rows
+            const rows = document.querySelectorAll('table tbody tr');
+            const hasRows = rows.length > 0;
+            const isEmpty = rows.length === 1 && rows[0].querySelector('.dataTables_empty');
+
+            // Ready if: Has headers, NOT processing, and (Has valid rows OR Is explicitly empty)
+            const isReady = hasHeaders && !isProcessing && (hasRows || isEmpty);
+
+            if (isReady) {
+                // Stabilize: wait one more tick to ensure rendering is done
+                setTimeout(callback, 200);
+            } else {
+                if (attempt > 40) { // ~20 seconds timeout (40 * 500ms)
+                    console.log('[Inconsistencias] Table wait timeout');
+                    callback(); // Proceed anyway, might fail but avoids infinite hang
+                    return;
+                }
+
+                setTimeout(() => {
+                    this.waitForTableLoad(callback, attempt + 1);
+                }, 500);
+            }
+        },
+
         checkAndFix(queue, caseNumber) {
-            // Wait a bit for DataTables to load
-            setTimeout(() => {
+            // Wait for table to load/stabilize first
+            this.waitForTableLoad(() => {
                 const analysis = analyzeDuplicates();
 
                 // Preserve the removed count from previous iterations
@@ -355,6 +402,11 @@
                 // Check if there's a red banner indicating duplicates exist
                 const hasRedBanner = !analysis.allGreen;
 
+                // Update HUD with progress
+                if (window.eprocUpdateHUDStatus) {
+                    window.eprocUpdateHUDStatus(`🔍 Analisando: ${result.removed} removidos até agora...`);
+                }
+
                 if (analysis.hasDuplicates) {
                     // Find and click a desativar link
                     for (const card of analysis.duplicateCards) {
@@ -363,15 +415,22 @@
                             console.log('[Inconsistencias] Removing duplicate:', toRemove);
                             result.removed++;
                             queue.removedCount++;
-                            Storage.saveQueue(queue);
+                            // Don't save entire queue to storage on every click to save I/O, unless critical
+
+                            // Update HUD
+                            if (window.eprocUpdateHUDStatus) {
+                                window.eprocUpdateHUDStatus(`🗑️ Removendo: ${toRemove.descricao}...`);
+                            }
 
                             // Click the desativar link (AJAX - no page reload)
                             toRemove.link.click();
 
-                            // Wait for AJAX to complete, then re-check for more duplicates
+                            // AJAX Handling: The table enters "processing" state.
+                            // We recurse into checkAndFix, which will start with waitForTableLoad.
+                            // Small delay to allow click to trigger processing state.
                             setTimeout(() => {
                                 this.checkAndFix(queue, caseNumber);
-                            }, 2000);
+                            }, 1000);
                             return;
                         }
                     }
@@ -390,29 +449,31 @@
                 }
 
                 // No more duplicates to remove - finalize this case
-                // Determine the correct status based on what actually happened
                 if (result.removed > 0) {
-                    // We actually removed duplicates - this is a success/fix
                     result.status = ResultType.FIXED;
                     result.message = `${result.removed} duplicata(s) removida(s)`;
                 } else if (hasRedBanner) {
-                    // There's still a red banner but we couldn't find duplicates to remove
                     result.status = ResultType.ERROR;
                     result.message = 'Banner vermelho presente, mas não foi possível corrigir automaticamente';
                 } else {
-                    // All green - no duplicates were ever present
                     result.status = ResultType.OK;
                     result.message = 'Sem duplicatas';
                 }
 
                 this.finalizeCase(queue, caseNumber, result);
 
-            }, 500); // Wait for tables to load
+            }); // end waitForTableLoad callback
         },
 
         finalizeCase(queue, caseNumber, result) {
             // Log this case
             console.log('[Inconsistencias] Finalizing case:', caseNumber, result);
+
+            // Update HUD
+            if (window.eprocUpdateHUDStatus) {
+                window.eprocUpdateHUDStatus(`✅ Finalizado: ${result.status}`);
+            }
+
             Storage.addEntry({
                 caseNumber: caseNumber,
                 timestamp: Date.now(),
@@ -425,14 +486,26 @@
             queue.currentIndex++;
             queue.currentStep = 'consultar';
 
+            // IMPORTANT: Save queue state now so if we reload we pick up correctly
+            Storage.saveQueue(queue);
+
             if (queue.currentIndex >= queue.cases.length) {
                 // All done!
                 Storage.clearQueue();
                 console.log('[Inconsistencias] Batch complete!');
+                if (window.eprocUpdateHUDStatus) {
+                    window.eprocUpdateHUDStatus(`🎉 Lote finalizado! Total processado: ${queue.cases.length}`);
+                }
+                // Force UI update to show "Finish" state (enable start button etc)
+                // We need to trigger the UI update in the HUD
+                if (window.eprocRefreshHUD) window.eprocRefreshHUD();
+
+                // Click Voltar one last time to reset state
+                console.log('[Inconsistencias] Batch done, resetting state with Voltar...');
+                clickVoltar();
                 return;
             }
 
-            Storage.saveQueue(queue);
 
             // Click Voltar for next case
             console.log('[Inconsistencias] Case done, clicking Voltar for next case...');
@@ -441,6 +514,8 @@
 
         executeNext(queue) {
             const currentCase = queue.cases[queue.currentIndex];
+            // Also refresh HUD on start of next execution
+            if (window.eprocRefreshHUD) window.eprocRefreshHUD();
 
             if (queue.currentStep === 'consultar') {
                 this.doConsultar(queue, currentCase);
@@ -665,6 +740,8 @@
             </div>
         `;
 
+
+
         document.body.appendChild(hud);
 
         // Elements
@@ -678,6 +755,12 @@
         const exportBtn = hud.querySelector('#inconsistencias-export');
         const clearBtn = hud.querySelector('#inconsistencias-clear');
         const countDiv = hud.querySelector('#inconsistencias-count');
+
+        // Expose updateStatus globally for generic access if needed
+        window.eprocUpdateHUDStatus = (text) => {
+            status.innerHTML = text;
+        };
+        window.eprocRefreshHUD = updateUI;
 
         // Toggle collapse
         toggle.addEventListener('click', () => {
