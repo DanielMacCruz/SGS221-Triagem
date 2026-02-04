@@ -36,11 +36,31 @@
       nameGroups: {},
       ausentes: [],
       nameColors: {},
-      enableRealWrites: false,
+      enableRealWrites: true,
       defaultGlobalChangeId: '',
       personalFinalsRaw: '',
       myPersonId: '',
-      myPersonName: ''
+      myPersonName: '',
+      teamsConfigRaw: JSON.stringify([
+        {
+          id: 'jec',
+          name: 'JEC / JUIZADO',
+          priority: 10,
+          matchers: [
+            { type: 'regex', pattern: 'JUIZADO\\\\s+ESPECIAL.*C[IÍ]VEL' },
+            { type: 'regex', pattern: '\\\\bJEC\\\\b' }
+          ],
+          workers: []
+        },
+        {
+          id: 'geral',
+          name: 'GERAL',
+          priority: 1,
+          isDefault: true,
+          matchers: [],
+          workers: []
+        }
+      ]),
     };
 
     const state = JSON.parse(JSON.stringify(defaults));
@@ -477,6 +497,20 @@
     .smax-log-btn-primary:hover { background:#1565c0; border-color:#1565c0; }
     .smax-log-btn-danger { background:#dc2626; border-color:#dc2626; color:#fff; }
     .smax-log-btn-danger:hover { background:#b91c1c; border-color:#b91c1c; }
+    
+    .smax-triage-select {
+        background: #0f172a;
+        color: #f8fafc;
+        border: 1px solid #334155;
+        border-radius: 4px;
+        padding: 2px 4px;
+        font-size: 11px;
+        width: 100%;
+        max-width: 140px;
+        cursor: pointer;
+    }
+    .smax-triage-select:disabled { opacity: 0.5; cursor: not-allowed; }
+    .smax-triage-select:focus { outline: none; border-color: #38bdf8; }
   `);
 
   /* ========================================================
@@ -882,6 +916,149 @@
   })();
 
   /* =========================================================
+   * Teams Config (Multi-team Logic)
+   * =======================================================*/
+  const TeamsConfig = (() => {
+    let cachedTeams = null;
+
+    const getTeams = () => {
+      if (cachedTeams) return cachedTeams;
+      try {
+        const raw = prefs.teamsConfigRaw;
+        // If raw is empty or error, use defaults from PrefStore
+        const parsed = JSON.parse(raw || '[]');
+        cachedTeams = Array.isArray(parsed) && parsed.length > 0 ? parsed : JSON.parse(PrefStore.defaults.teamsConfigRaw);
+        // Ensure regex strings are converted to RegExps if needed
+        cachedTeams.forEach(t => {
+          if (t.matchers) {
+            t.matchers.forEach(m => {
+              if (m.type === 'regex' && typeof m.pattern === 'string') {
+                // simple conversion assuming flags 'i' if not specified
+                // Security note: trusted input only
+                m._regex = new RegExp(m.pattern, 'i');
+              }
+            });
+          }
+        });
+        // Sort by priority desc
+        cachedTeams.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+      } catch (err) {
+        console.warn('[SMAX] Failed to parse teams config:', err);
+        cachedTeams = [];
+      }
+      return cachedTeams;
+    };
+
+    const getTeamById = (id) => getTeams().find(t => t.id === id) || null;
+
+    // Suggest a team based on ticket data
+    // Suggest a team based on ticket data
+    const suggestTeam = (ticket) => {
+      const teams = getTeams();
+      if (!ticket) return teams.find(t => t.isDefault) || teams[0];
+
+      // Use GSE ID (ExpertGroup) for routing based on user requirement
+      const gseId = ticket.assignmentGroupId || ticket.ExpertGroup || '';
+      const gseName = (ticket.assignmentGroupName || '').toUpperCase();
+
+      // Combine text for matching: GSE Prio > Description > Subject
+      const matchText = [
+        gseName,
+        ticket.descriptionText || '',
+        ticket.subjectText || '',
+        ticket.descriptionHtml || '' // sometimes raw html helps if text is missing
+      ].join(' ').toUpperCase();
+
+      for (const team of teams) {
+        if (team.isDefault) continue;
+
+        // Check gseRules (list of {id, name})
+        if (team.gseRules && Array.isArray(team.gseRules)) {
+          // Check ID
+          if (team.gseRules.some(r => r.id === gseId)) return team;
+          // Check Name if ID didn't match (or wasn't present)
+          if (gseName && team.gseRules.some(r => (r.name || r.id || '').toUpperCase() === gseName)) return team;
+        }
+
+        // Check legacy/simple gseIds
+        if (team.gseIds && Array.isArray(team.gseIds)) {
+          if (team.gseIds.includes(gseId)) return team;
+        }
+
+        // Check matchers (regex)
+        // REGEX is retired for now. We work exclusively with GSE currently but we will incorporate regex eventually.
+        /*
+        if (team.matchers && Array.isArray(team.matchers)) {
+          for (const m of team.matchers) {
+            if (m.type === 'regex' && m._regex) {
+              if (m._regex.test(matchText)) return team;
+            }
+          }
+        }
+        */
+
+        // Fallback: Check if Team ID or Name is contained in GSE Name (Loose match for "Work exclusively with GSE")
+        if (gseName) {
+          const idMatch = team.id && gseName.includes(team.id.toUpperCase());
+          // Careful with Name match: "JEC / JUIZADO" might not match "VARA DO JEC".
+          // But we can check parts or simpler logic? For now, ID match is safest fallback.
+          if (idMatch) return team;
+        }
+      }
+
+      return teams.find(t => t.isDefault) || teams[0];
+    };
+
+    const parseWorkers = (rawText) => {
+      // Line-based parser: Name (Digits)
+      // e.g. "Douglas (00-10)"
+      return rawText.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+        // simplified matcher
+        const match = line.match(/^(.+?)\s*[\(\[]([\d,\-\s]+)[\)\]]$/);
+        if (match) {
+          return { name: match[1].trim(), digits: match[2].trim() };
+        }
+        return { name: line, digits: '' }; // fallback
+      });
+    };
+
+    const suggestWorker = (team, ticketIdOrText) => {
+      if (!team || !team.workers || !team.workers.length) return null;
+
+      const digitBlock = Utils.extractTrailingDigits(ticketIdOrText) || '';
+      if (digitBlock.length < 2) return null;
+
+      // Sliding window loop: check last 2 digits, if owned by absent (or no one?), shift left.
+      // Logic mirrors Distribution.ownerForDigits: checks i=length down to 2.
+      // e.g. ...5555510 -> check 10. If absent, check 51. If absent, check 55.
+      for (let i = digitBlock.length; i >= 2; i -= 1) {
+        const pair = digitBlock.slice(i - 2, i);
+        const digit = parseInt(pair, 10);
+        if (isNaN(digit)) continue;
+
+        for (const w of team.workers) {
+          // Optimization: create ranges once per worker/team reload? For now, keep it simple/safe.
+          const ranges = Utils.parseDigitRanges(w.digits);
+          if (ranges.includes(digit)) {
+            if (w.isAbsent) break; // Found owner but absent -> Break inner loop, continue outer (try next pair)
+            return w; // Found owner and present -> Return
+          }
+        }
+      }
+      return null;
+    };
+
+    const getWorkersForTeam = (id) => {
+      const t = getTeamById(id);
+      return t ? (t.workers || []) : [];
+    };
+
+    const reload = () => { cachedTeams = null; };
+
+    return { getTeams, getTeamById, getWorkersForTeam, suggestTeam, suggestWorker, reload };
+  })();
+
+  /* =========================================================
    * Color registry for owner badges
    * =======================================================*/
   const ColorRegistry = (() => {
@@ -1280,7 +1457,9 @@
             idText: id,
             idNum: Number.isNaN(idNum) ? null : idNum,
             createdTs,
-            isVip
+            isVip,
+            assignmentGroupId: props.ExpertGroup || '',
+            assignmentGroupName: (rel.ExpertGroup && rel.ExpertGroup.Name) || ''
           });
         }
 
@@ -1592,41 +1771,9 @@
   /* =========================================================
    * Distribution (digits -> owner)
    * =======================================================*/
-  const Distribution = (() => {
-    const mapping = new Map();
-    let currentAusentes = [];
-
-    const rebuild = () => {
-      mapping.clear();
-      const groups = prefs.nameGroups || {};
-      const ausentes = prefs.ausentes || [];
-      Object.entries(groups).forEach(([name, digits]) => {
-        digits.forEach((digit) => {
-          const key = String(digit).padStart(2, '0');
-          mapping.set(key, name);
-        });
-      });
-      currentAusentes = ausentes.slice();
-    };
-
-    const isActive = (name) => name && !currentAusentes.includes(name);
-
-    const ownerForDigits = (digits) => {
-      const cleaned = (digits || '').replace(/\D/g, '');
-      if (cleaned.length < 2) return null;
-      for (let i = cleaned.length; i >= 2; i -= 1) {
-        const pair = cleaned.slice(i - 2, i);
-        const owner = mapping.get(pair);
-        if (!owner) continue;
-        if (isActive(owner)) return owner;
-      }
-      return null;
-    };
-
-    rebuild();
-
-    return { rebuild, ownerForDigits };
-  })();
+  /* =========================================================
+   * Refresh overlay helper
+   * =======================================================*/
 
   /* =========================================================
    * Refresh overlay helper
@@ -2253,13 +2400,55 @@
 
     const apply = () => {
       if (!prefs.nameBadgesOn) return;
+
+      // Locate columns
+      let gseColIndex = -1;
+      let descColIndex = -1;
+      let subjectColIndex = -1;
+
+      const headers = document.querySelectorAll('.slick-header-column');
+      headers.forEach((col, idx) => {
+        const title = (col.getAttribute('title') || col.textContent || '').trim().toUpperCase();
+        if (title.includes('GRUPO DE ATRIBUI') || title.includes('ASSIGNMENT GROUP') || title.includes('GRUPO')) {
+          gseColIndex = idx;
+        } else if (title.includes('DESCRI')) {
+          descColIndex = idx;
+        } else if (title.includes('ASSUNTO') || title.includes('TÍTULO') || title.includes('TITULO') || title.includes('SUBJECT')) {
+          subjectColIndex = idx;
+        }
+      });
+
       pickAllLinks().forEach((link) => {
         if (!link || processed.has(link)) return;
-        processed.add(link);
-        const label = (link.textContent || '').trim();
-        const digits = Utils.extractTrailingDigits(label);
-        const owner = Distribution.ownerForDigits(digits);
+
         const cell = link.closest('.slick-cell');
+        if (!cell) return;
+        const row = cell.parentElement;
+        if (!row) return;
+
+        processed.add(link);
+
+        const label = (link.textContent || '').trim();
+
+        let gseName = '';
+        let descriptionText = '';
+        let subjectText = '';
+
+        const cells = row.querySelectorAll('.slick-cell');
+        if (gseColIndex >= 0 && cells[gseColIndex]) gseName = (cells[gseColIndex].textContent || '').trim();
+        if (descColIndex >= 0 && cells[descColIndex]) descriptionText = (cells[descColIndex].textContent || '').trim();
+        if (subjectColIndex >= 0 && cells[subjectColIndex]) subjectText = (cells[subjectColIndex].textContent || '').trim();
+
+        // Resolve Team (GSE First)
+        const team = TeamsConfig.suggestTeam({
+          assignmentGroupName: gseName,
+          descriptionText,
+          subjectText
+        });
+
+        // Resolve Worker
+        const worker = TeamsConfig.suggestWorker(team, label);
+        const owner = worker ? worker.name : null;
 
         if (cell) {
           cell.classList.add('tmx-namecell');
@@ -2269,6 +2458,15 @@
             cell.style.color = fg;
             cell.querySelectorAll('a').forEach((a) => { a.style.color = 'inherit'; });
           } else {
+            // Check if it's covered by ANY team we know? 
+            // If team is default (GERAL) and no worker found -> RED?
+            // If team is NOT default (e.g. JEC) and no worker found -> RED?
+            // User requirement: "GSE is not mattering. Only priority." -> Wait, user request said "GRID UI... GSE is not mattering. Only priority."
+            // BUT the User Request text was ambiguous: "GSE is not mattering. Only priority."
+            // AND "HUD: seems to be correct for now. This means you can reuse the assign logic to correct!"
+            // The user meant: "Currently in Grid UI, GSE is not mattering (bug). Only priority (bug or incomplete). HUD is correct (uses GSE). Reuse HUD logic."
+            // So my interpretation is correct: Make Grid UI respect GSE.
+
             cell.style.background = '#d32f2f';
             cell.style.color = '#fff';
             cell.querySelectorAll('a').forEach((a) => { a.style.color = 'inherit'; });
@@ -2304,315 +2502,438 @@
   /* =========================================================
    * Settings panel
    * =======================================================*/
+  /* =========================================================
+   * Settings panel
+   * =======================================================*/
   const SettingsPanel = (() => {
     let container;
     let toggleBtn;
     let detachPeopleWatcher;
+    let currentTeams = []; // Local state for editing
+    let editingTeamId = null; // ID of team currently being edited ('__NEW__' for new team)
 
-    const buildNameRows = () => {
-      const nameGroups = prefs.nameGroups || {};
-      const ausentes = prefs.ausentes || [];
-      const sortedNames = Object.keys(nameGroups).sort();
-      if (!sortedNames.length) {
-        return '<div style="color:#555;">Nenhuma pessoa adicionada ainda.</div>';
-      }
-      return sortedNames.map((name) => {
-        const digits = nameGroups[name];
-        const rangeStr = Utils.digitsToRangeString(digits);
-        const isAbsent = ausentes.includes(name);
-        const bg = isAbsent ? '#ffe0e0' : '#f9f9f9';
-        return `
-          <div style="margin-bottom:10px;padding:8px;background:${bg};border-radius:4px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-              <span style="min-width:140px;font-weight:600;">${name}</span>
-              <label class="smax-absent-wrapper">
-                <input type="checkbox" class="smax-name-absent smax-absent-input" data-name="${name}" ${isAbsent ? 'checked' : ''}>
-                <span class="smax-absent-box"></span>
-                Ausente
-              </label>
-              <input type="text" class="smax-name-digits" data-name="${name}" value="${rangeStr}"
-                    style="flex:1;padding:6px;border:1px solid #ccc;border-radius:3px;font-family:monospace;"
-                    placeholder="0-6 ou 7,8,10-15">
-              <button class="smax-remove-name" data-name="${name}"
-                      style="padding:4px 8px;background:#d32f2f;color:#fff;border:none;border-radius:3px;cursor:pointer;">
-                ✕
-              </button>
-            </div>
-          </div>`;
-      }).join('');
+    // Load fresh config from prefs
+    const reloadConfig = () => {
+      currentTeams = TeamsConfig.getTeams().map(t => JSON.parse(JSON.stringify(t)));
     };
 
-    const buildSelfSelectOptions = () => {
-      const selectedId = prefs.myPersonId ? String(prefs.myPersonId) : '';
-      const placeholder = DataRepository.peopleCache.size ? 'Escolha seu nome...' : 'Carregando pessoas...';
-      const options = [`<option value="" ${selectedId ? '' : 'selected'}>${placeholder}</option>`];
-      const people = Array.from(DataRepository.peopleCache.values())
-        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      if (selectedId && prefs.myPersonName && !people.some((p) => String(p.id) === selectedId)) {
-        options.push(`<option value="${Utils.escapeHtml(selectedId)}" data-name="${Utils.escapeHtml(prefs.myPersonName || '')}" selected>${Utils.escapeHtml(prefs.myPersonName || 'Selecionado anteriormente')}</option>`);
-      }
-      people.forEach((p) => {
-        const value = Utils.escapeHtml(String(p.id || ''));
-        const label = Utils.escapeHtml(p.name || '');
-        const selected = selectedId && String(p.id) === selectedId ? 'selected' : '';
-        options.push(`<option value="${value}" data-name="${label}" ${selected}>${label}</option>`);
+    const saveConfig = () => {
+      prefs.teamsConfigRaw = JSON.stringify(currentTeams, null, 2);
+      savePrefs();
+      TeamsConfig.reload();
+      RefreshOverlay.show();
+    };
+
+    const renderHeader = () => `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:#444;">
+          Configurações do Assistente
+        </div>
+      </div>`;
+
+
+
+    // --- Team Editor Methods ---
+
+    const renderTeamsList = () => {
+      if (editingTeamId) return renderTeamEditor(editingTeamId);
+
+      const listHtml = currentTeams.map(t => {
+        const isDefault = !!t.isDefault;
+        return `
+          <div class="smax-team-item" style="border:1px solid #eee;border-radius:4px;padding:8px;margin-bottom:8px;background:#f9f9f9;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <strong style="font-size:13px;color:#333;">${Utils.escapeHtml(t.id || 'Sem ID')}</strong>
+                ${isDefault ? '<span style="font-size:10px;background:#ddd;padding:1px 4px;border-radius:3px;margin-left:4px;">Padrão</span>' : ''}
+                <div style="font-size:11px;color:#666;">Prioridade: ${t.priority || 0} • Matchers: ${t.matchers ? t.matchers.length : 0} • Workers: ${t.workers ? t.workers.length : 0}</div>
+              </div>
+              <div style="display:flex;gap:4px;">
+                <button class="smax-team-edit-btn" data-id="${t.id}" style="font-size:11px;padding:3px 8px;cursor:pointer;">Editar</button>
+                ${!isDefault ? `<button class="smax-team-del-btn" data-id="${t.id}" style="font-size:11px;padding:3px 8px;cursor:pointer;color:#d32f2f;">Remover</button>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div style="margin-top:16px;border-top:1px solid #eee;padding-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span style="font-weight:600;color:#444;">Equipes e Regras</span>
+            <button id="smax-add-team-btn" style="font-size:11px;padding:4px 8px;cursor:pointer;background:#2563eb;color:#fff;border:none;border-radius:4px;">+ Nova Equipe</button>
+          </div>
+          <div id="smax-teams-list-container">${listHtml}</div>
+        </div>
+      `;
+    };
+
+    const renderTeamEditor = (teamId) => {
+      const isNew = teamId === '__NEW__';
+      const team = isNew ? { id: '', priority: 0, gseRules: [], workers: [] } : currentTeams.find(t => t.id === teamId);
+      if (!team) return '<div>Equipe não encontrada. <button class="smax-cancel-edit">Voltar</button></div>';
+
+      const gseHtml = (team.gseRules || []).map((r, idx) => `
+        <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;">
+          <input type="hidden" class="smax-gse-id" value="${Utils.escapeHtml(r.id)}">
+          <input type="text" class="smax-gse-name" value="${Utils.escapeHtml(r.name || r.id)}" disabled style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">
+          <button class="smax-gse-del-btn" style="color:#d32f2f;border:none;background:none;cursor:pointer;">✕</button>
+        </div>
+      `).join('');
+
+      const workersHtml = (team.workers || []).map((w, idx) => `
+        <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;background:#fff;border:1px solid #eee;padding:4px;border-radius:4px;">
+          <input type="text" class="smax-worker-name" data-idx="${idx}" value="${Utils.escapeHtml(w.name || '')}" style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="Nome do Responsável">
+          <input type="text" class="smax-worker-digits" data-idx="${idx}" value="${Utils.escapeHtml(w.digits || '')}" style="width:80px;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="Digitos (ex: 0-9)">
+          
+          <div class="smax-worker-absent-wrapper" style="display:flex;align-items:center;cursor:pointer;user-select:none;">
+             <input type="checkbox" class="smax-worker-absent" data-idx="${idx}" ${w.isAbsent ? 'checked' : ''} style="display:none;">
+             <div class="smax-absent-fake" style="width:14px;height:14px;border:1px solid ${w.isAbsent ? '#d32f2f' : '#999'};margin-right:4px;background:${w.isAbsent ? '#d32f2f' : '#fff'};border-radius:2px;display:flex;align-items:center;justify-content:center;"></div>
+             <span style="font-size:10px;color:#d32f2f;">Ausente</span>
+          </div>
+
+          <button class="smax-worker-del-btn" data-idx="${idx}" style="color:#d32f2f;border:none;background:none;cursor:pointer;">✕</button>
+        </div>
+      `).join('');
+
+      return `
+        <div style="margin-top:16px;border:1px solid #blue;padding:10px;border-radius:6px;background:#f0f9ff;">
+          <div style="font-weight:600;margin-bottom:8px;color:#1e40af;">${isNew ? 'Criar Nova Equipe' : 'Editar Equipe ' + team.id}</div>
+          
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px;">
+            <div>
+              <label style="display:block;font-size:10px;font-weight:600;">ID da Equipe (Nome)</label>
+              <input type="text" id="smax-edit-id" value="${Utils.escapeHtml(team.id || '')}" ${!isNew ? 'disabled' : ''} style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;">
+            </div>
+            <div>
+              <label style="display:block;font-size:10px;font-weight:600;">Prioridade</label>
+              <input type="number" id="smax-edit-prio" value="${team.priority || 0}" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;">
+            </div>
+          </div>
+
+
+          <div style="margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:600;margin-bottom:4px;">Grupos de Suporte (GSE) - Roteamento</div>
+            
+             <!-- GSE Search -->
+            <div style="margin-bottom:8px;border:1px solid #e5e7eb;background:#fff;border-radius:4px;padding:6px;">
+              <input type="text" id="smax-team-gse-search" placeholder="🔍 Buscar GSE para adicionar..." 
+                     style="width:100%;padding:4px 6px;border:1px solid #ccc;border-radius:3px;font-size:11px;margin-bottom:4px;">
+              <div id="smax-team-gse-results" style="max-height:100px;overflow-y:auto;border-top:1px solid #eee;display:none;"></div>
+            </div>
+
+            <div id="smax-gse-list">${gseHtml}</div>
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:600;margin-bottom:4px;">Membros e Distribuição</div>
+            
+            <!-- Person Search for Adding Workers -->
+            <div style="margin-bottom:8px;border:1px solid #e5e7eb;background:#fff;border-radius:4px;padding:6px;">
+              <input type="text" id="smax-team-person-search" placeholder="🔍 Buscar pessoa para adicionar..." 
+                     style="width:100%;padding:4px 6px;border:1px solid #ccc;border-radius:3px;font-size:11px;margin-bottom:4px;">
+              <div id="smax-team-person-results" style="max-height:100px;overflow-y:auto;border-top:1px solid #eee;display:none;"></div>
+            </div>
+
+            <div id="smax-workers-list">${workersHtml}</div>
+            <button id="smax-add-worker-btn" style="font-size:10px;padding:2px 6px;margin-top:4px;background:#e2e8f0;border:none;border-radius:3px;cursor:pointer;">+ Adicionar Manualmente</button>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+            <button class="smax-cancel-edit" style="padding:4px 10px;cursor:pointer;background:#fff;border:1px solid #ccc;border-radius:4px;">Cancelar</button>
+            <button id="smax-save-team-btn" style="padding:4px 12px;cursor:pointer;background:#16a34a;color:#fff;border:none;border-radius:4px;">Salvar Equipe</button>
+          </div>
+        </div>
+      `;
+    };
+
+    const wireTeamEvents = () => {
+      // List View Events
+      const addBtn = container.querySelector('#smax-add-team-btn');
+      if (addBtn) addBtn.addEventListener('click', () => { editingTeamId = '__NEW__'; renderPanel(); });
+
+      container.querySelectorAll('.smax-team-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => { editingTeamId = btn.dataset.id; renderPanel(); });
       });
-      return options.join('');
+
+      container.querySelectorAll('.smax-team-del-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.id;
+          if (confirm(`Tem certeza que deseja remover a equipe "${id}"?`)) {
+            currentTeams = currentTeams.filter(t => t.id !== id);
+            saveConfig();
+            renderPanel();
+          }
+        });
+      });
+
+      // Edit View Events
+      if (editingTeamId) {
+        // Toggle Logic for existing rows
+        container.querySelectorAll('.smax-worker-absent-wrapper').forEach(wrapper => {
+          const chk = wrapper.querySelector('.smax-worker-absent');
+          const fake = wrapper.querySelector('.smax-absent-fake');
+          wrapper.addEventListener('click', () => {
+            chk.checked = !chk.checked;
+            fake.style.background = chk.checked ? '#d32f2f' : '#fff';
+            fake.style.borderColor = chk.checked ? '#d32f2f' : '#999';
+          });
+        });
+
+        const cancelBtn = container.querySelector('.smax-cancel-edit');
+        if (cancelBtn) cancelBtn.addEventListener('click', () => { editingTeamId = null; renderPanel(); });
+
+        const saveBtn = container.querySelector('#smax-save-team-btn');
+        if (saveBtn) saveBtn.addEventListener('click', () => {
+          const idInput = container.querySelector('#smax-edit-id');
+          const prioInput = container.querySelector('#smax-edit-prio');
+          const newId = idInput.value.trim();
+          const newPrio = parseInt(prioInput.value, 10) || 0;
+
+          if (!newId) return alert('O ID da equipe é obrigatório.');
+          if (editingTeamId === '__NEW__' && currentTeams.some(t => t.id === newId)) return alert('Já existe uma equipe com este ID.');
+
+          // Collect GSEs
+          const newGseRules = [];
+          container.querySelectorAll('#smax-gse-list > div').forEach(div => {
+            const idInput = div.querySelector('.smax-gse-id');
+            const nameInput = div.querySelector('.smax-gse-name');
+            if (idInput && nameInput) {
+              newGseRules.push({ id: idInput.value, name: nameInput.value });
+            }
+          });
+
+          // Collect workers
+          const newWorkers = [];
+          container.querySelectorAll('#smax-workers-list > div').forEach(div => {
+            const nameInput = div.querySelector('.smax-worker-name');
+            const digitsInput = div.querySelector('.smax-worker-digits');
+            const absentInput = div.querySelector('.smax-worker-absent');
+            if (nameInput && digitsInput) {
+              const name = nameInput.value.trim();
+              const digits = digitsInput.value.trim();
+              const isAbsent = absentInput ? !!absentInput.checked : false;
+              if (name) newWorkers.push({ name, digits, isAbsent });
+            }
+          });
+
+          // Update state
+          const newTeam = { id: newId, priority: newPrio, gseRules: newGseRules, workers: newWorkers };
+
+          if (editingTeamId === '__NEW__') {
+            currentTeams.push(newTeam);
+          } else {
+            const idx = currentTeams.findIndex(t => t.id === editingTeamId);
+            if (idx !== -1) {
+              // Merge to keep other props? Maybe not needed for now, but safe
+              currentTeams[idx] = { ...currentTeams[idx], ...newTeam };
+            }
+          }
+
+          editingTeamId = null;
+          saveConfig();
+          renderPanel();
+        });
+
+        // --- GSE Search Logic ---
+        const gseSearchInput = container.querySelector('#smax-team-gse-search');
+        const gseResultsEl = container.querySelector('#smax-team-gse-results');
+
+        const addGseResult = (id, name) => {
+          const list = container.querySelector('#smax-gse-list');
+          const tempDiv = document.createElement('div');
+          tempDiv.style.display = 'flex';
+          tempDiv.style.gap = '6px';
+          tempDiv.style.marginBottom = '4px';
+          tempDiv.style.alignItems = 'center';
+          tempDiv.innerHTML = `
+            <input type="hidden" class="smax-gse-id" value="${Utils.escapeHtml(id)}">
+            <input type="text" class="smax-gse-name" value="${Utils.escapeHtml(name)}" disabled style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">
+            <button class="smax-gse-del-btn" style="color:#d32f2f;border:none;background:none;cursor:pointer;">✕</button>
+          `;
+          tempDiv.querySelector('.smax-gse-del-btn').addEventListener('click', (e) => e.target.closest('div').remove());
+          if (list) list.appendChild(tempDiv);
+          gseSearchInput.value = '';
+          gseResultsEl.style.display = 'none';
+        };
+
+        if (gseSearchInput && gseResultsEl) {
+          gseSearchInput.addEventListener('input', () => {
+            const q = gseSearchInput.value.toUpperCase();
+            gseResultsEl.style.display = q ? 'block' : 'none';
+            if (!q) return;
+
+            // Search supportGroupMap from DataRepository
+            // Note: supportGroupMap keys are IDs. Values are objects? 
+            // We need to access the map. DataRepository doesn't expose it directly but has 'getSupportGroupsSnapshot'
+            // Actually currently 'DataRepository.getSupportGroupsSnapshot' returns array.
+            // Let's check getSupportGroupsSnapshot signature.
+            // It returns Array.from(supportGroupMap.values())
+
+            const groups = DataRepository.getSupportGroupsSnapshot();
+            if (!groups.length) {
+              gseResultsEl.innerHTML = '<div style="padding:4px;color:#999;font-size:10px;">Carregando GSEs... (clique no HUD para forçar)</div>';
+              DataRepository.ensureSupportGroups(); // Trigger load if needed
+              return;
+            }
+
+            const matches = groups.filter(g => (g.name || '').toUpperCase().includes(q) || (g.id || '').includes(q)).slice(0, 15);
+
+            if (!matches.length) {
+              gseResultsEl.innerHTML = '<div style="padding:4px;color:#999;font-size:10px;">Nenhum resultado.</div>';
+            } else {
+              gseResultsEl.innerHTML = matches.map(g => `
+                  <div class="smax-gse-pick" data-id="${g.id}" data-name="${Utils.escapeHtml(g.name)}" style="padding:3px 6px;cursor:pointer;font-size:10px;border-bottom:1px solid #f5f5f5;">
+                    <div><strong>${Utils.escapeHtml(g.name)}</strong></div>
+                    <div style="color:#666;font-size:9px;">ID: ${g.id}</div>
+                  </div>
+               `).join('');
+
+              gseResultsEl.querySelectorAll('.smax-gse-pick').forEach(el => {
+                el.addEventListener('click', () => {
+                  addGseResult(el.dataset.id, el.dataset.name);
+                });
+              });
+            }
+          });
+          gseSearchInput.addEventListener('blur', () => setTimeout(() => { gseResultsEl.style.display = 'none'; }, 200));
+          gseSearchInput.addEventListener('focus', () => DataRepository.ensureSupportGroups());
+        }
+
+        // Existing deletes for initial render
+        container.querySelectorAll('.smax-gse-del-btn').forEach(b => b.addEventListener('click', e => e.target.closest('div').remove()));
+
+        // --- Person Search Logic (Existing) ---
+        const searchInput = container.querySelector('#smax-team-person-search');
+        const resultsEl = container.querySelector('#smax-team-person-results');
+
+        const addWorkerResult = (name) => {
+          const list = container.querySelector('#smax-workers-list');
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = `
+            <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;background:#fff;border:1px solid #eee;padding:4px;border-radius:4px;">
+              <input type="text" class="smax-worker-name" value="${Utils.escapeHtml(name)}" style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="Nome">
+              <input type="text" class="smax-worker-digits" value="" style="width:80px;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="0-9">
+              <div class="smax-worker-absent-wrapper" style="display:flex;align-items:center;cursor:pointer;user-select:none;">
+                <input type="checkbox" class="smax-worker-absent" style="display:none;">
+                <div class="smax-absent-fake" style="width:14px;height:14px;border:1px solid #999;margin-right:4px;background:#fff;border-radius:2px;display:flex;align-items:center;justify-content:center;"></div>
+                <span style="font-size:10px;color:#d32f2f;">Ausente</span>
+              </div>
+              <button class="smax-remove-temp-row" style="color:#d32f2f;border:none;background:none;cursor:pointer;">✕</button>
+            </div>`;
+          const row = tempDiv.firstElementChild;
+          row.querySelector('.smax-remove-temp-row').addEventListener('click', () => row.remove());
+
+          // Custom toggle logic
+          const wrapper = row.querySelector('.smax-worker-absent-wrapper');
+          const chk = row.querySelector('.smax-worker-absent');
+          const fake = row.querySelector('.smax-absent-fake');
+
+          wrapper.addEventListener('click', () => {
+            chk.checked = !chk.checked;
+            fake.style.background = chk.checked ? '#d32f2f' : '#fff';
+            fake.style.borderColor = chk.checked ? '#d32f2f' : '#999';
+          });
+          if (list) list.appendChild(tempDiv.firstElementChild);
+          // Clear search
+          searchInput.value = '';
+          resultsEl.style.display = 'none';
+        };
+
+        if (searchInput && resultsEl) {
+          const attachPickHandlers = () => {
+            resultsEl.querySelectorAll('.smax-person-pick').forEach(el => {
+              el.addEventListener('click', () => {
+                const name = el.getAttribute('data-name');
+                if (name) addWorkerResult(name);
+              });
+            });
+          };
+
+          const renderSearchResults = (term) => {
+            const q = (term || '').trim().toUpperCase();
+            resultsEl.style.display = q ? 'block' : 'none';
+            if (!q) return;
+
+            if (!DataRepository.peopleCache.size) {
+              resultsEl.innerHTML = '<div style="padding:4px;color:#999;font-size:10px;">Carregando...</div>';
+              return;
+            }
+
+            const matches = [];
+            for (const p of DataRepository.peopleCache.values()) {
+              const name = (p.name || '').toUpperCase();
+              const upn = (p.upn || '').toUpperCase();
+              if (name.includes(q) || upn.includes(q)) {
+                matches.push(p);
+                if (matches.length >= 20) break;
+              }
+            }
+
+            if (!matches.length) {
+              resultsEl.innerHTML = '<div style="padding:4px;color:#999;font-size:10px;">Nenhum resultado.</div>';
+            } else {
+              resultsEl.innerHTML = matches.map(p => `
+                   <div class="smax-person-pick" data-name="${Utils.escapeHtml(p.name)}" style="padding:3px 6px;cursor:pointer;font-size:10px;border-bottom:1px solid #f5f5f5;">
+                     <strong>${p.name}</strong> ${p.upn ? `<span>(${p.upn})</span>` : ''}
+                   </div>
+                 `).join('');
+              attachPickHandlers();
+            }
+          };
+
+          searchInput.addEventListener('input', () => renderSearchResults(searchInput.value));
+          searchInput.addEventListener('focus', () => renderSearchResults(searchInput.value));
+          // Hide on blur delayed to allow click
+          searchInput.addEventListener('blur', () => setTimeout(() => { resultsEl.style.display = 'none'; }, 200));
+        }
+
+        const addWorkerBtn = container.querySelector('#smax-add-worker-btn');
+        if (addWorkerBtn) addWorkerBtn.addEventListener('click', () => addWorkerResult('')); // Add empty if manual
+
+        // Existing deletes
+        container.querySelectorAll('.smax-worker-del-btn').forEach(b => b.addEventListener('click', e => e.target.closest('div').remove()));
+      }
     };
 
     const renderPanel = () => {
       if (!container) return;
       container.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <div style="font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:#444;">
-            Distribuição de chamados
-          </div>
-        </div>
-
-        <div id="smax-realwrites-panel" style="margin-bottom:10px;padding:8px 10px;border-radius:6px;border:1px solid #ddd;display:flex;align-items:center;justify-content:space-between;gap:10px;${prefs.enableRealWrites ? 'background:#fff7ed;border-color:#fdba74;' : ''}">
-          <div style="display:flex;flex-direction:column;font-size:12px;color:#333;">
-            <span style="font-weight:600;">Modo real (gravar no SMAX)</span>
-            <span style="opacity:0.8;">Quando ativo, urgência, atribuição e vínculo ao global salvam de verdade.</span>
-          </div>
-          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
-            <input type="checkbox" id="smax-realwrites-toggle" ${prefs.enableRealWrites ? 'checked' : ''} />
-            <span>${prefs.enableRealWrites ? 'Ativo' : 'Ativar'}</span>
-          </label>
-        </div>
-
-        <div id="smax-self-assign-panel" style="margin-bottom:12px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:#1f2937;">
-          <label for="smax-self-select" style="font-weight:600;">Responsável pelas respostas rápidas:</label>
-          <select id="smax-self-select" style="padding:6px 10px;border-radius:6px;border:1px solid #cbd5f5;background:#fff;font-size:12px;">
-            ${buildSelfSelectOptions()}
-          </select>
-        </div>
-
-        <div style="margin-bottom:10px;border:1px solid #ddd;border-radius:6px;padding:8px 8px 6px;display:flex;flex-direction:column;gap:6px;">
-          <input type="text" id="smax-person-search" placeholder="Adicionar pessoa"
-                style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
-          <div id="smax-person-results" style="max-height:140px;overflow:auto;font-size:12px;"></div>
-        </div>
-
-        <div id="smax-team-list">${buildNameRows()}</div>
-
-        <div id="smax-activity-log-panel">
+        ${renderHeader()}
+        ${renderTeamsList()}
+        
+        <div id="smax-activity-log-panel" style="margin-top:20px;padding-top:10px;border-top:1px solid #eee;">
           <h4>📊 Registro de Atividades</h4>
           <div class="smax-log-stats">
             <span id="smax-log-count">${ActivityLog.getCount()}</span> entradas registradas
           </div>
           <div class="smax-log-actions">
-            <button type="button" class="smax-log-btn smax-log-btn-primary" id="smax-log-export-all" title="Exportar todo o log">📥 Exportar CSV</button>
-            <button type="button" class="smax-log-btn" id="smax-log-export-spreadsheet" title="Exportar relatório formatado">Relatório (Planilha)</button>
-            <button type="button" class="smax-log-btn" id="smax-log-export-7d" title="Exportar últimos 7 dias">Últimos 7 dias</button>
-            <button type="button" class="smax-log-btn smax-log-btn-danger" id="smax-log-clear" title="Limpar todo o log">🗑️ Limpar</button>
+            <button type="button" class="smax-log-btn smax-log-btn-primary" id="smax-log-export-all">📥 Exportar CSV</button>
+            <button type="button" class="smax-log-btn" id="smax-log-export-spreadsheet">Relatório</button>
+            <button type="button" class="smax-log-btn smax-log-btn-danger" id="smax-log-clear">🗑️ Limpar</button>
           </div>
         </div>
       `;
       wirePanelEvents();
-      refreshSelfSelectOptions();
+      wireTeamEvents();
       wireLogPanelEvents();
     };
 
     const wireLogPanelEvents = () => {
       if (!container) return;
       const exportAllBtn = container.querySelector('#smax-log-export-all');
-      const export7dBtn = container.querySelector('#smax-log-export-7d');
       const clearBtn = container.querySelector('#smax-log-clear');
       const countEl = container.querySelector('#smax-log-count');
+      const refreshLogCount = () => { if (countEl) countEl.textContent = String(ActivityLog.getCount()); };
 
-      const refreshLogCount = () => {
-        if (countEl) countEl.textContent = String(ActivityLog.getCount());
-      };
-
-      if (exportAllBtn) {
-        exportAllBtn.addEventListener('click', () => ActivityLog.exportCsv());
-      }
+      if (exportAllBtn) exportAllBtn.addEventListener('click', () => ActivityLog.exportCsv());
       const exportSpreadsheetBtn = container.querySelector('#smax-log-export-spreadsheet');
-      if (exportSpreadsheetBtn) {
-        exportSpreadsheetBtn.addEventListener('click', () => ActivityLog.exportSpreadsheetCsv());
-      }
-      if (export7dBtn) {
-        export7dBtn.addEventListener('click', () => ActivityLog.exportCsv(7));
-      }
-      if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-          if (ActivityLog.clear()) {
-            refreshLogCount();
-          }
-        });
-      }
-    };
-
-    const refreshSelfSelectOptions = () => {
-      if (!container) return;
-      const select = container.querySelector('#smax-self-select');
-      if (!select) return;
-      const previousValue = prefs.myPersonId ? String(prefs.myPersonId) : select.value;
-      select.innerHTML = buildSelfSelectOptions();
-      if (prefs.myPersonId) {
-        select.value = String(prefs.myPersonId);
-      } else if (previousValue && select.querySelector(`option[value="${previousValue}"]`)) {
-        select.value = previousValue;
-      } else {
-        select.selectedIndex = 0;
-      }
-    };
-
-    const ensurePeopleWatcher = () => {
-      if (detachPeopleWatcher || typeof DataRepository.onPeopleUpdate !== 'function') return;
-      detachPeopleWatcher = DataRepository.onPeopleUpdate(() => {
-        refreshSelfSelectOptions();
-      });
+      if (exportSpreadsheetBtn) exportSpreadsheetBtn.addEventListener('click', () => ActivityLog.exportSpreadsheetCsv());
+      if (clearBtn) clearBtn.addEventListener('click', () => { if (ActivityLog.clear()) refreshLogCount(); });
     };
 
     const wirePanelEvents = () => {
-      const realToggle = container.querySelector('#smax-realwrites-toggle');
-      const realPanel = container.querySelector('#smax-realwrites-panel');
-      if (realToggle && realPanel) {
-        realToggle.addEventListener('change', () => {
-          prefs.enableRealWrites = !!realToggle.checked;
-          savePrefs();
-          if (realToggle.checked) {
-            realPanel.style.background = '#fff7ed';
-            realPanel.style.borderColor = '#fdba74';
-            realPanel.querySelector('span:last-child').textContent = 'Ativo';
-          } else {
-            realPanel.style.background = '';
-            realPanel.style.borderColor = '#ddd';
-            realPanel.querySelector('span:last-child').textContent = 'Ativar';
-          }
-          const flag = document.getElementById('smax-triage-real-flag');
-          if (flag) flag.style.display = prefs.enableRealWrites ? 'block' : 'none';
-        });
-      }
-
-      const searchInput = container.querySelector('#smax-person-search');
-      const resultsEl = container.querySelector('#smax-person-results');
-      if (searchInput && resultsEl) {
-        const renderResults = (term) => {
-          const q = (term || '').trim().toUpperCase();
-          if (!q) {
-            const preview = Array.from(DataRepository.peopleCache.values()).slice(0, 5).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-            resultsEl.innerHTML = preview.map((p) => personOptionTemplate(p)).join('');
-            attachPersonPickHandlers(resultsEl);
-            return;
-          }
-          if (!DataRepository.peopleCache.size) {
-            resultsEl.innerHTML = '<div style="color:#999;">Carregando pessoas do SMAX...</div>';
-            return;
-          }
-          const matches = [];
-          for (const p of DataRepository.peopleCache.values()) {
-            const name = (p.name || '').toUpperCase();
-            const upn = (p.upn || '').toUpperCase();
-            if (name.includes(q) || upn.includes(q)) {
-              matches.push(p);
-              if (matches.length >= 30) break;
-            }
-          }
-          resultsEl.innerHTML = matches.length ? matches.map((p) => personOptionTemplate(p)).join('') : '<div style="color:#999;">Nenhuma pessoa corresponde à busca.</div>';
-          attachPersonPickHandlers(resultsEl);
-        };
-
-        searchInput.addEventListener('input', () => renderResults(searchInput.value));
-        searchInput.addEventListener('focus', () => renderResults(searchInput.value));
-        renderResults('');
-      }
-
-      const selfSelect = container.querySelector('#smax-self-select');
-      if (selfSelect) {
-        selfSelect.addEventListener('change', () => {
-          const selectedOption = selfSelect.options[selfSelect.selectedIndex];
-          if (!selectedOption || !selectedOption.value) {
-            prefs.myPersonId = '';
-            prefs.myPersonName = '';
-            savePrefs();
-            return;
-          }
-          const chosenId = selectedOption.value;
-          const person = DataRepository.peopleCache.get(chosenId) || Array.from(DataRepository.peopleCache.values()).find((p) => String(p.id) === String(chosenId));
-          if (person) {
-            prefs.myPersonId = String(person.id || '').trim();
-            prefs.myPersonName = person.name || '';
-          } else {
-            prefs.myPersonId = chosenId;
-            prefs.myPersonName = selectedOption.dataset.name || selectedOption.textContent || '';
-          }
-          savePrefs();
-        });
-      }
-
-      container.querySelectorAll('.smax-remove-name').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const name = btn.dataset.name;
-          if (!confirm(`Remover ${name} da equipe?`)) return;
-          const groups = prefs.nameGroups || {};
-          delete groups[name];
-          prefs.nameGroups = groups;
-          prefs.ausentes = (prefs.ausentes || []).filter((n) => n !== name);
-          ColorRegistry.remove(name);
-          savePrefs();
-          Distribution.rebuild();
-          RefreshOverlay.show();
-          renderPanel();
-        });
-      });
-
-      container.querySelectorAll('.smax-name-digits').forEach((input) => {
-        input.addEventListener('input', () => {
-          const cleaned = input.value.replace(/[^0-9,\-]/g, '');
-          if (cleaned !== input.value) input.value = cleaned;
-        });
-        input.addEventListener('change', () => {
-          const name = input.dataset.name;
-          const groups = prefs.nameGroups || {};
-          groups[name] = Utils.parseDigitRanges(input.value.trim());
-          prefs.nameGroups = groups;
-          savePrefs();
-          Distribution.rebuild();
-          RefreshOverlay.show();
-        });
-      });
-
-      container.querySelectorAll('.smax-name-absent').forEach((checkbox) => {
-        checkbox.addEventListener('change', () => {
-          const name = checkbox.dataset.name;
-          const ausentes = new Set(prefs.ausentes || []);
-          if (checkbox.checked) ausentes.add(name);
-          else ausentes.delete(name);
-          prefs.ausentes = Array.from(ausentes);
-          savePrefs();
-          Distribution.rebuild();
-          checkbox.closest('div[style*="margin-bottom:10px"]').style.background = checkbox.checked ? '#ffe0e0' : '#f9f9f9';
-          RefreshOverlay.show();
-        });
-      });
-    };
-
-    const personOptionTemplate = (p) => `
-      <div class="smax-person-pick" data-name="${(p.name || '').replace(/"/g, '&quot;')}" style="padding:4px 6px;cursor:pointer;border-radius:3px;">
-        <strong>${p.name}</strong>
-        ${p.upn ? `<span style="color:#555;"> (${p.upn})</span>` : ''}
-        ${p.isVip ? '<span style="margin-left:4px;padding:0 4px;border-radius:999px;background:#facc15;color:#854d0e;font-size:10px;font-weight:700;">VIP</span>' : ''}
-      </div>
-    `;
-
-    const attachPersonPickHandlers = (resultsEl) => {
-      resultsEl.querySelectorAll('.smax-person-pick').forEach((el) => {
-        el.addEventListener('click', () => {
-          const picked = (el.getAttribute('data-name') || '').toUpperCase();
-          if (!picked) return;
-          const groups = prefs.nameGroups || {};
-          if (!groups[picked]) {
-            groups[picked] = [];
-            prefs.nameGroups = groups;
-            savePrefs();
-            Distribution.rebuild();
-            RefreshOverlay.show();
-            renderPanel();
-          }
-        });
-      });
+      // Cleaned up (RealWrites and SelfSelect removed)
     };
 
     const init = () => {
@@ -2620,14 +2941,14 @@
       toggleBtn = document.createElement('button');
       toggleBtn.id = 'smax-settings-btn';
       toggleBtn.textContent = '⚙️';
-      toggleBtn.title = 'Configurações do assistente de triagem';
+      toggleBtn.title = 'Configurações de Equipes e Triagem';
       Object.assign(toggleBtn.style, { position: 'fixed', right: '12px', bottom: '12px', zIndex: 999999, border: 'none' });
       document.body.appendChild(toggleBtn);
 
       container = document.createElement('div');
       container.id = 'smax-settings';
       Object.assign(container.style, {
-        position: 'fixed', right: '12px', bottom: '70px', maxWidth: '650px', maxHeight: '80vh', minHeight: '220px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '8px', background: '#fff', boxShadow: '0 6px 18px rgba(0,0,0,.25)', display: 'none'
+        position: 'fixed', right: '12px', bottom: '70px', maxWidth: '650px', maxHeight: '85vh', minHeight: '300px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '8px', background: '#fff', boxShadow: '0 6px 18px rgba(0,0,0,.25)', display: 'none'
       });
       document.body.appendChild(container);
 
@@ -2635,15 +2956,16 @@
         const visible = container.style.display !== 'none';
         if (!visible) {
           DataRepository.ensurePeopleLoaded();
+          reloadConfig();
           renderPanel();
           container.style.display = 'block';
         } else {
           container.style.display = 'none';
         }
       });
-
-      ensurePeopleWatcher();
     };
+
+
 
     return { init, renderPanel };
   })();
@@ -2883,7 +3205,9 @@
       parentSelected: false,
       assignmentGroupId: '',
       assignmentGroupName: '',
-      assignmentGroupSelected: false
+      assignmentGroupSelected: false,
+      selectedTeamId: '',
+      selectedWorkerId: ''
     };
     let quickReplyHtml = '';
     let quickReplyEditor = null;
@@ -3719,6 +4043,8 @@
       stagedState.assignmentGroupId = '';
       stagedState.assignmentGroupName = '';
       stagedState.assignmentGroupSelected = false;
+      stagedState.selectedTeamId = '';
+      stagedState.selectedWorkerId = '';
       const ck = backdrop.querySelector('#smax-triage-used-script');
       if (ck) ck.checked = false;
     };
@@ -3734,7 +4060,10 @@
     const ownerForCurrent = () => {
       const item = currentItem();
       if (!item) return null;
-      return Distribution.ownerForDigits(item.idText) || Distribution.ownerForDigits(item.idNum != null ? String(item.idNum) : '');
+      // Use Team-based resolution (GSE First) instead of global Distribution
+      const team = TeamsConfig.suggestTeam(item);
+      const worker = TeamsConfig.suggestWorker(team, item.idText || (item.idNum != null ? String(item.idNum) : ''));
+      return worker ? worker.name : null;
     };
 
     const normalizePersonName = (value) => (value || '')
@@ -3840,6 +4169,46 @@
       }).join('');
     };
 
+    const populateTeamsDropdown = (selectedTeamId = '') => {
+      if (!backdrop) return;
+      const select = backdrop.querySelector('#smax-triage-team-select');
+      if (!select) return;
+
+      const teams = TeamsConfig.getTeams();
+      let html = '';
+      teams.forEach(t => {
+        const isSel = String(t.id) === String(selectedTeamId);
+        html += `<option value="${Utils.escapeHtml(t.id)}" ${isSel ? 'selected' : ''}>${Utils.escapeHtml(t.name)}</option>`;
+      });
+      select.innerHTML = html;
+      select.disabled = false;
+      stagedState.selectedTeamId = select.value;
+    };
+
+    const populateWorkerDropdown = (teamId, selectedWorkerName = '') => {
+      if (!backdrop) return;
+      const select = backdrop.querySelector('#smax-triage-worker-select');
+      if (!select) return;
+
+      const workers = TeamsConfig.getWorkersForTeam(teamId);
+      if (!workers || !workers.length) {
+        select.innerHTML = '<option value="">(Sem atendentes)</option>';
+        select.disabled = true;
+        stagedState.selectedWorkerId = '';
+        return;
+      }
+
+      let html = '';
+      workers.forEach(w => {
+        const isSel = w.name === selectedWorkerName;
+        const rangeLabel = w.ranges ? ` (${w.ranges})` : '';
+        html += `<option value="${Utils.escapeHtml(w.name)}" ${isSel ? 'selected' : ''}>${Utils.escapeHtml(w.name)}${rangeLabel}</option>`;
+      });
+      select.innerHTML = html;
+      select.disabled = false;
+      stagedState.selectedWorkerId = select.value;
+    };
+
     const render = () => {
       if (!backdrop) return;
       closeGseDropdown();
@@ -3880,7 +4249,11 @@
         refreshGseSelect();
         if (assignPanel) {
           assignPanel.dataset.state = 'disabled';
-          if (assignValue) assignValue.textContent = 'Sem dono configurado';
+          // Clear dropdowns
+          const tSelect = backdrop.querySelector('#smax-triage-team-select');
+          const wSelect = backdrop.querySelector('#smax-triage-worker-select');
+          if (tSelect) { tSelect.innerHTML = ''; tSelect.disabled = true; }
+          if (wSelect) { wSelect.innerHTML = ''; wSelect.disabled = true; }
         }
         if (inputGlobal) inputGlobal.value = '';
         if (inputGlobal) inputGlobal.dataset.state = 'inactive';
@@ -3990,6 +4363,19 @@
         if (solutionHtml) setStatus('Solução atual carregada deste chamado.', 2500);
         else setBaselineStatus();
 
+        // Calculate and set suggestions
+        const suggestedTeam = TeamsConfig.suggestTeam(full);
+        const suggestedTeamId = suggestedTeam ? suggestedTeam.id : '';
+        const suggestedWorker = TeamsConfig.suggestWorker(suggestedTeam, full.idText || full.Id);
+
+        populateTeamsDropdown(suggestedTeamId);
+        populateWorkerDropdown(suggestedTeamId, suggestedWorker ? suggestedWorker.name : '');
+
+        // Sync assignment source-of-truth
+        currentOwnerName = suggestedWorker ? suggestedWorker.name : '';
+
+        refreshButtons(); // Update stages based on new suggestions
+
         fetchAttachmentsForRequest(pendingRequestId);
       });
 
@@ -4011,6 +4397,36 @@
           if (!stagedState.parentId) stagedState.parentSelected = false;
           refreshButtons();
           setBaselineStatus();
+        });
+      }
+
+      const teamSelect = backdrop.querySelector('#smax-triage-team-select');
+      if (teamSelect && !teamSelect.dataset.wired) {
+        teamSelect.dataset.wired = '1';
+        teamSelect.addEventListener('change', () => {
+          stagedState.selectedTeamId = teamSelect.value;
+
+          // Re-run suggestion for the NEW team
+          const item = currentItem();
+          const newTeam = TeamsConfig.getTeamById(stagedState.selectedTeamId);
+          const suggestedInfo = TeamsConfig.suggestWorker(newTeam, item ? (item.idText || item.idNum) : '');
+          const newWorkerName = suggestedInfo ? suggestedInfo.name : '';
+
+          populateWorkerDropdown(stagedState.selectedTeamId, newWorkerName);
+          currentOwnerName = newWorkerName;
+          stagedState.selectedWorkerId = newWorkerName; // Ensure state tracks it immediately
+
+          refreshButtons();
+        });
+      }
+
+      const workerSelect = backdrop.querySelector('#smax-triage-worker-select');
+      if (workerSelect && !workerSelect.dataset.wired) {
+        workerSelect.dataset.wired = '1';
+        workerSelect.addEventListener('change', () => {
+          stagedState.selectedWorkerId = workerSelect.value;
+          currentOwnerName = workerSelect.value; // Manual override
+          refreshButtons();
         });
       }
 
@@ -4187,15 +4603,11 @@
       const usedScript = usedScriptCheckbox ? !!usedScriptCheckbox.checked : false;
 
       let expertAssigneeId = '';
-      if (props.Solution && prefs.myPersonId && !stagedState.assign) {
-        expertAssigneeId = String(prefs.myPersonId).trim();
-      } else if (stagedState.assign && stagedState.assignPersonId) {
+      // Only set ExpertAssignee if we are explicitly assigning (stagedState.assign equal true)
+      if (stagedState.assign && stagedState.assignPersonId) {
         expertAssigneeId = String(stagedState.assignPersonId);
       } else if (stagedState.assign && !stagedState.assignPersonId) {
-        console.debug('[SMAX][Triagem] Staged assignment missing person id', {
-          owner: ownerForCurrent(),
-          peopleCacheSize: DataRepository.peopleCache.size
-        });
+        console.warn('[SMAX][Triagem] Assignment requested but no person ID resolved for owner.');
       }
 
       if (expertAssigneeId) {
@@ -4212,7 +4624,7 @@
       }
 
       if (!prefs.enableRealWrites) {
-        setStatus('Modo simulação ativo. Mudanças não foram gravadas.', 2500);
+        setStatus('Modo simulação ativo (Verifique Settings). Mudanças não foram gravadas.', 2500);
         advanceQueue();
         return;
       }
@@ -4493,9 +4905,13 @@
                     <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
                   </div>
                   <div class="smax-triage-auto-panels">
-                    <div class="smax-triage-indicator" id="smax-triage-assign-panel" data-state="disabled">
+                    <div class="smax-triage-indicator" id="smax-triage-assign-panel" data-state="disabled" style="min-width:150px;">
                       <span class="smax-indicator-label">Atribuição automática</span>
-                      <span class="smax-indicator-value" id="smax-triage-assign-value">Sem dono configurado</span>
+                      <div style="display:flex;flex-direction:column;gap:3px;margin-top:2px;">
+                        <select id="smax-triage-team-select" class="smax-triage-select" disabled></select>
+                        <select id="smax-triage-worker-select" class="smax-triage-select" disabled></select>
+                      </div>
+                      <span class="smax-indicator-value" id="smax-triage-assign-value" style="display:none;">Sem dono configurado</span>
                     </div>
                     <div class="smax-triage-global-group">
                       <input type="text" class="smax-global-input" id="smax-triage-global-id" placeholder="ID do global (cuidado)" inputmode="numeric" autocomplete="off" />
@@ -4589,6 +5005,37 @@
           rebuildQueueForPersonalFinals();
         });
       }
+      rebuildQueueForPersonalFinals();
+
+
+      const teamSelect = backdrop.querySelector('#smax-triage-team-select');
+      if (teamSelect) {
+        teamSelect.addEventListener('change', () => {
+          stagedState.selectedTeamId = teamSelect.value;
+          // Suggest a worker for this team if available
+          // For now, logic: if team changed, valid worker for previous team is invalid for new team usually
+          // We can filter current ticket to suggest worker
+          // We can filter current ticket to suggest worker
+          const fullPayload = DataRepository.triageCache.get(activeTicketId); // Try to get full if available
+          const ticket = fullPayload || currentItem();
+          const ticketId = ticket ? (ticket.idText || String(ticket.idNum || '')) : '';
+          const team = TeamsConfig.getTeamById(teamSelect.value);
+          const suggestedWorker = TeamsConfig.suggestWorker(team, ticketId);
+          populateWorkerDropdown(teamSelect.value, suggestedWorker ? suggestedWorker.name : '');
+          refreshButtons();
+
+          setBaselineStatus();
+        });
+      }
+      const workerSelect = backdrop.querySelector('#smax-triage-worker-select');
+      if (workerSelect) {
+        workerSelect.addEventListener('change', () => {
+          stagedState.selectedWorkerId = workerSelect.value;
+          refreshButtons();
+          setBaselineStatus();
+        });
+      }
+
       const guideBtn = backdrop.querySelector('#smax-triage-guide-btn');
       if (guideBtn) guideBtn.addEventListener('click', (evt) => {
         evt.stopPropagation();
