@@ -373,18 +373,18 @@
     #smax-refresh-overlay-inner { width:70px; height:70px; border-radius:50%; background:#34c759; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px rgba(255,255,255,.35), 0 0 16px rgba(52,199,89,.8); }
     #smax-refresh-now { width:46px; height:46px; border-radius:50%; border:none; background:transparent; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:26px; }
 
-    #smax-triage-start-btn { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:999999; padding:10px 22px; border-radius:999px; border:none; cursor:pointer; font-size:16px; font-weight:600; background:#1976d2; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,.35); }
-    #smax-triage-hud-backdrop { position:fixed; inset:0; padding:30px 0 20px; background:rgba(0,0,0,0.5); z-index:999997; display:none; align-items:flex-start; justify-content:center; overflow:auto; }
-    #smax-triage-hud { position:relative; background:#111827; color:#e5e7eb; border-radius:12px; padding:16px 18px 14px; max-width:1310px; width:99vw; max-height:calc(100vh - 60px); box-shadow:0 20px 45px rgba(0,0,0,.7); font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; gap:14px; align-items:stretch; }
-    .smax-triage-header-nav { display:inline-flex; align-items:center; gap:6px; margin-right:6px; }
-    .smax-triage-header-nav button { width:36px; height:28px; border-radius:999px; border:1px solid #38bdf8; background:transparent; color:#38bdf8; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.15s ease, color 0.15s ease; }
-    .smax-triage-header-nav button:hover:not(:disabled) { background:#38bdf8; color:#0f172a; }
-    .smax-triage-header-nav button:disabled { opacity:0.4; cursor:not-allowed; }
-    #smax-triage-hud-main { display:flex; flex-direction:column; gap:10px; flex:1; min-width:0; }
-    #smax-triage-hud-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:10px; }
-    #smax-triage-hud-header h3 { margin:0; font-size:15px; line-height:1.2; }
-    #smax-triage-hud-header .smax-triage-title-bar { display:flex; align-items:center; gap:10px; flex:1; }
-    #smax-personal-finals-label { display:flex; align-items:center; gap:6px; font-size:11px; color:#94a3b8; }
+    #smax-triage-start-btn { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:999999; padding:12px 28px; border-radius:999px; border:none; cursor:pointer; font-size:16px; font-weight:600; background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%); color:#fff; box-shadow:0 8px 24px rgba(59,130,246,.4),0 0 0 1px rgba(255,255,255,.1) inset; transition:transform .15s ease, box-shadow .15s ease; }
+    #smax-triage-start-btn:hover { transform:translateX(-50%) translateY(-2px); box-shadow:0 12px 32px rgba(59,130,246,.5),0 0 0 1px rgba(255,255,255,.15) inset; }
+    #smax-triage-hud-backdrop { position:fixed; inset:0; padding:30px 0 20px; background:linear-gradient(180deg,rgba(0,0,0,0.7) 0%,rgba(0,0,0,0.5) 100%); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); z-index:999997; display:none; align-items:flex-start; justify-content:center; overflow:auto; }
+    #smax-triage-hud { position:relative; background:#0f172a; color:#e5e7eb; border-radius:16px; padding:0; max-width:1340px; width:99vw; max-height:calc(100vh - 60px); box-shadow:0 25px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08) inset; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; gap:0; align-items:stretch; overflow:hidden; }
+    .smax-triage-header-nav { display:inline-flex; align-items:center; gap:8px; margin-right:8px; }
+    .smax-triage-header-nav button { width:38px; height:32px; border-radius:8px; border:none; background:rgba(255,255,255,.2); color:#fff; font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.15s ease, transform 0.1s ease; }
+    .smax-triage-header-nav button:hover:not(:disabled) { background:rgba(255,255,255,.35); transform:scale(1.05); }
+    .smax-triage-header-nav button:disabled { opacity:0.35; cursor:not-allowed; }
+    #smax-triage-hud-main { display:flex; flex-direction:column; gap:12px; flex:1; min-width:0; }
+    #smax-triage-hud-header { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 20px; background:linear-gradient(90deg,#0ea5e9 0%,#3b82f6 50%,#8b5cf6 100%); border-radius:16px 0 0 0; }
+    #smax-triage-hud-header h3 { margin:0; font-size:17px; font-weight:600; line-height:1.2; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.3); }
+    #smax-triage-hud-header .smax-triage-title-bar { display:flex; align-items:center; gap:12px; flex:1; }
     #smax-personal-finals-input { background:#0f172a; border:1px solid #1f2937; border-radius:999px; padding:2px 8px; color:#f8fafc; font-size:11px; min-width:120px; }
     #smax-triage-gse-wrapper { position:relative; min-width:220px; display:flex; flex-direction:column; gap:4px; }
     #smax-triage-gse-display { width:100%; border-radius:10px; border:1px solid #1f2937; background:#0f172a; color:#f8fafc; font-size:12px; min-height:32px; padding:6px 32px 6px 12px; text-align:left; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease, color .15s ease; }
@@ -408,21 +408,21 @@
     #smax-triage-gse-wrapper[data-state="staged"] #smax-triage-gse-dropdown { border-color:#22c55e; box-shadow:0 18px 45px rgba(34,197,94,0.45); }
     #smax-triage-gse-wrapper[data-state="loading"] #smax-triage-gse-display { border-style:dashed; }
     #smax-personal-finals-input::placeholder { color:#6b7280; }
-    #smax-triage-hud-body { background:#020617; border-radius:8px; padding:12px 14px; flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-    #smax-triage-hud-footer { display:flex; flex-direction:column; gap:12px; }
-    .smax-triage-top-row { display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; }
-    .smax-triage-inline-controls { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+    #smax-triage-hud-body { background:rgba(2,6,23,0.85); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-radius:12px; padding:14px 16px; margin:0 16px; flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; border:1px solid rgba(255,255,255,.06); }
+    #smax-triage-hud-footer { display:flex; flex-direction:column; gap:14px; padding:0 16px 16px; }
+    .smax-triage-top-row { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center; }
+    .smax-triage-inline-controls { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-start; }
     .smax-triage-main-actions { display:flex; flex-direction:column; gap:4px; align-items:flex-end; min-width:210px; }
     .smax-triage-main-actions-buttons { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
     .smax-triage-urg-group { display:flex; flex-wrap:wrap; gap:6px; }
     .smax-triage-auto-panels { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; min-width:260px; justify-content:flex-end; margin-left:auto; }
-    .smax-triage-indicator { display:flex; flex-direction:column; gap:2px; padding:6px 10px; border-radius:10px; border:1px solid #374151; background:#020617; min-width:140px; font-size:12px; color:#f1f5f9; transition:border-color .15s ease, box-shadow .15s ease, opacity .15s ease; flex:0 0 auto; width:auto; }
-    .smax-triage-indicator .smax-indicator-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; }
+    .smax-triage-indicator { display:flex; flex-direction:column; gap:3px; padding:8px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.1); background:linear-gradient(135deg,rgba(15,23,42,0.9) 0%,rgba(2,6,23,0.95) 100%); min-width:150px; font-size:12px; color:#f1f5f9; transition:all .2s ease; flex:0 0 auto; width:auto; box-shadow:0 4px 12px rgba(0,0,0,.2); }
+    .smax-triage-indicator .smax-indicator-label { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#64748b; font-weight:500; }
     .smax-triage-indicator[data-state="pending"] { border-color:#facc15; box-shadow:0 0 12px rgba(250,204,21,0.25); }
     .smax-triage-indicator[data-state="staged"] { border-color:#22c55e; box-shadow:0 0 16px rgba(34,197,94,0.35); }
     .smax-triage-indicator[data-state="disabled"] { opacity:0.6; border-style:dashed; box-shadow:none; }
     .smax-triage-global-group { display:flex; flex-direction:column; gap:4px; font-size:12px; color:#e5e7eb; flex:0 0 auto; min-width:170px; }
-    .smax-global-input { width:140px; padding:4px 8px; border-radius:999px; border:1px solid #4b5563; background:#020617; color:#e5e7eb; font-size:12px; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+    .smax-global-input { padding:8px 12px; border-radius:8px; border:1px solid #475569; background:#1e293b; color:#e5e7eb; font-size:12px; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease; }
     .smax-global-input::placeholder { color:#6b7280; opacity:1; }
     .smax-global-input:focus { outline:none; border-color:#38bdf8; box-shadow:0 0 8px rgba(56,189,248,0.35); }
     .smax-global-input[data-state="staged"] { border-color:#22c55e; background:#052e16; color:#bbf7d0; box-shadow:0 0 12px rgba(34,197,94,0.35); }
@@ -435,8 +435,10 @@
     #smax-quick-guide-panel h4 { margin:0 0 6px; font-size:13px; }
     #smax-quick-guide-panel ul { margin:0; padding-left:16px; }
     #smax-quick-guide-panel li { margin-bottom:4px; line-height:1.35; }
-    .smax-triage-primary { padding:8px 16px; border-radius:999px; border:none; cursor:pointer; background:#22c55e; color:#022c22; font-weight:600; }
-    .smax-triage-secondary { padding:6px 12px; border-radius:999px; border:1px solid #4b5563; background:transparent; color:#e5e7eb; cursor:pointer; font-size:13px; }
+    .smax-triage-primary { padding:10px 20px; border-radius:10px; border:none; cursor:pointer; background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%); color:#fff; font-weight:600; font-size:14px; box-shadow:0 4px 16px rgba(34,197,94,.35); transition:transform .15s ease, box-shadow .15s ease; }
+    .smax-triage-primary:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(34,197,94,.45); }
+    .smax-triage-secondary { padding:8px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.15); background:rgba(255,255,255,.05); color:#e5e7eb; cursor:pointer; font-size:13px; transition:all .15s ease; }
+    .smax-triage-secondary:hover { background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.25); }
     .smax-triage-chip { transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease; }
     .smax-triage-chip[data-active="true"], .smax-triage-chip[data-active="selected"] { box-shadow:0 0 0 1px rgba(250,250,250,0.7), 0 0 18px rgba(250,250,250,0.55); transform:translateY(-1px) scale(1.01); }
     .smax-urg-low[data-active="true"]  { background:#facc15;color:#111827;border-color:#facc15; }
@@ -444,10 +446,11 @@
     .smax-urg-high[data-active="true"] { background:#f97316;color:#111827;border-color:#f97316; }
     .smax-urg-crit[data-active="true"] { background:#ef4444;color:#fee2e2;border-color:#ef4444; }
     #smax-triage-status { font-size:12px; color:#9ca3af; }
-    #smax-triage-discussions { width:320px; background:#050c1d; border:1px solid #1f2937; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:10px; overflow:auto; flex-shrink:0; min-height:0; max-height:100%; }
-    .smax-discussions-placeholder { font-size:13px; color:#94a3b8; line-height:1.4; }
-    .smax-discussion-card { border:1px solid #1f2937; border-radius:8px; padding:8px 10px; background:#0f172a; display:flex; flex-direction:column; gap:6px; }
-    .smax-discussion-heading { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:12px; }
+    #smax-triage-discussions { width:340px; background:linear-gradient(180deg,rgba(5,12,29,0.95) 0%,rgba(2,6,23,0.98) 100%); border:1px solid rgba(255,255,255,.08); border-radius:0 0 12px 0; padding:14px; display:flex; flex-direction:column; gap:12px; overflow:auto; flex-shrink:0; min-height:0; max-height:100%; }
+    .smax-discussions-placeholder { font-size:13px; color:#64748b; line-height:1.5; }
+    .smax-discussion-card { border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:10px 12px; background:linear-gradient(135deg,rgba(15,23,42,0.8) 0%,rgba(30,41,59,0.4) 100%); display:flex; flex-direction:column; gap:8px; transition:border-color .15s ease, box-shadow .15s ease; }
+    .smax-discussion-card:hover { border-color:rgba(255,255,255,.2); box-shadow:0 4px 16px rgba(0,0,0,.3); }
+    .smax-discussion-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; }
     .smax-discussion-title { font-weight:600; color:#f8fafc; }
     .smax-discussion-privacy { font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:1px 8px; border-radius:999px; border:1px solid rgba(248,250,252,0.3); color:#e2e8f0; }
     .smax-discussion-card[data-privacy="PUBLIC"] .smax-discussion-privacy { background:#082f49; border-color:#38bdf8; color:#bae6fd; }
@@ -457,11 +460,9 @@
     .smax-discussion-body p { margin:0 0 6px; }
     .smax-discussion-body p:last-child { margin-bottom:0; }
     .smax-discussion-meta { font-size:11px; color:#94a3b8; }
-    #smax-triage-ticket-details { flex:1; background:#0f172a; border:1px solid #1f2937; border-radius:8px; padding:10px 12px 8px; min-height:0; overflow:auto; }
+    #smax-triage-ticket-details { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
     #smax-triage-ticket-details img { max-width:100%; height:auto; display:block; border-radius:6px; margin-top:6px; }
-    #smax-triage-hud-body .smax-triage-desc { max-height:240px; overflow:auto; padding:6px 8px; border-radius:6px; background:#020617; border:1px solid #1f2937; }
-    .smax-triage-meta-row { display:flex; flex-wrap:wrap; gap:14px; font-size:13px; color:#cbd5f5; margin-bottom:4px; }
-    .smax-triage-meta-row strong { color:#f1f5f9; }
+    .smax-triage-meta-row { display:flex; flex-wrap:wrap; align-items:center; gap:12px; font-size:13px; color:#cbd5e1; }
     #smax-triage-quickreply-card { border:1px solid #1f2937; border-radius:8px; padding:10px; background:#020617; width:100%; box-sizing:border-box; transition:border-color 0.2s ease, box-shadow 0.2s ease; }
     #smax-triage-quickreply-card[data-staged="true"] { border-color:#38bdf8; box-shadow:0 0 12px rgba(56,189,248,0.35); }
     #smax-triage-quickreply-card textarea { width:100%; min-height:140px; resize:vertical; background:#020617; color:#e5e7eb; border:1px solid #374151; border-radius:6px; padding:8px; font-family:"Segoe UI",sans-serif; box-sizing:border-box; }
@@ -499,18 +500,22 @@
     .smax-log-btn-danger:hover { background:#b91c1c; border-color:#b91c1c; }
     
     .smax-triage-select {
-        background: #0f172a;
+        background: #1e293b;
         color: #f8fafc;
-        border: 1px solid #334155;
-        border-radius: 4px;
-        padding: 2px 4px;
-        font-size: 11px;
-        width: 100%;
-        max-width: 140px;
+        border: 1px solid #475569;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 12px;
         cursor: pointer;
+        transition: border-color .15s ease, box-shadow .15s ease;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        padding-right: 28px;
     }
     .smax-triage-select:disabled { opacity: 0.5; cursor: not-allowed; }
-    .smax-triage-select:focus { outline: none; border-color: #38bdf8; }
+    .smax-triage-select:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 8px rgba(56,189,248,.35); }
   `);
 
   /* ========================================================
@@ -1059,15 +1064,104 @@
   })();
 
   /* =========================================================
-   * Color registry for owner badges
+   * Color registry for owner badges (Deterministic Team-Based)
    * =======================================================*/
   const ColorRegistry = (() => {
-    const ensureStore = () => {
-      if (!prefs.nameColors) prefs.nameColors = {};
-      return prefs.nameColors;
+    // Aesthetic color palettes - each team gets one
+    // REDESIGNED: Wider hue ranges for more variety, lower saturation for softer look
+    const TEAM_PALETTES = [
+      // Team 0: Ocean Blues (wide range from cyan to deep blue)
+      { name: 'ocean', hueStart: 185, hueEnd: 245, saturation: 40, lightnessStart: 40, lightnessEnd: 65 },
+      // Team 1: Earth Greens (olive to emerald)
+      { name: 'forest', hueStart: 80, hueEnd: 160, saturation: 35, lightnessStart: 35, lightnessEnd: 60 },
+      // Team 2: Warm Spectrum (peach to terracotta)
+      { name: 'warm', hueStart: 5, hueEnd: 45, saturation: 45, lightnessStart: 45, lightnessEnd: 68 },
+      // Team 3: Cool Purples (lavender to plum)
+      { name: 'purple', hueStart: 250, hueEnd: 320, saturation: 35, lightnessStart: 42, lightnessEnd: 65 },
+      // Team 4: Aqua Range (mint to teal)
+      { name: 'aqua', hueStart: 155, hueEnd: 200, saturation: 38, lightnessStart: 38, lightnessEnd: 62 },
+      // Team 5: Berry Tones (rose to magenta)
+      { name: 'berry', hueStart: 320, hueEnd: 360, saturation: 40, lightnessStart: 45, lightnessEnd: 65 },
+      // Team 6: Neutral Blues (steel to slate)
+      { name: 'slate', hueStart: 200, hueEnd: 230, saturation: 18, lightnessStart: 40, lightnessEnd: 62 },
+      // Team 7: Golden Range (sand to amber)
+      { name: 'golden', hueStart: 35, hueEnd: 80, saturation: 42, lightnessStart: 48, lightnessEnd: 68 }
+    ];
+
+    // Cache for computed colors
+    const colorCache = new Map();
+
+    /**
+     * Generate a color based on team index and last 2 digits of ticket ID
+     * @param {number} teamIndex - Index of the team (0-based)
+     * @param {number} lastTwoDigits - Last 2 digits of ticket ID (0-99)
+     * @returns {{bg: string, fg: string}}
+     */
+    const generateForTeamAndDigits = (teamIndex, lastTwoDigits) => {
+      // "All colors", forget differentiating teams
+      // Map 0-99 to 0-360 degrees for maximum variety
+      const t = lastTwoDigits / 99;
+
+      // Use a pseudo-random spread to avoid adjacent numbers having adjacent colors
+      // Multiply by a prime number (e.g., 137 degrees - golden angle approx) to scatter colors
+      const hue = (lastTwoDigits * 137.5) % 360;
+
+      // High saturation for vibrancy (65-85%)
+      const saturation = 70 + (Math.sin(t * Math.PI * 4) * 10);
+
+      // Balanced lightness (45-60%) for readability
+      const lightness = 50 + (Math.cos(t * Math.PI * 2) * 8);
+
+      const bg = `hsl(${Math.round(hue)}, ${Math.round(saturation)}%, ${Math.round(lightness)}%)`;
+      // Always white text for these vibrant dark/mid colors
+      const fg = '#ffffff';
+
+      return { bg, fg };
     };
 
-    const generate = (name) => {
+    /**
+     * Get the team index from TeamsConfig
+     * @param {string} teamId - Team ID
+     * @returns {number} Team index (0-based)
+     */
+    const getTeamIndex = (teamId) => {
+      if (!teamId) return 0;
+      const teams = TeamsConfig.getTeams();
+      const idx = teams.findIndex(t => t.id === teamId);
+      return idx >= 0 ? idx : 0;
+    };
+
+    /**
+     * Get deterministic color for a ticket based on team and ID
+     * @param {Object} options - Color options
+     * @param {string} options.teamId - Team ID
+     * @param {string|number} options.ticketId - Ticket ID (will extract last 2 digits)
+     * @returns {{bg: string, fg: string}}
+     */
+    const getForTicket = ({ teamId, ticketId }) => {
+      // Extract last 2 digits from ticket ID
+      const idStr = String(ticketId || '').replace(/\D/g, '');
+      const lastTwo = idStr.length >= 2 ? parseInt(idStr.slice(-2), 10) : 0;
+      const teamIndex = getTeamIndex(teamId);
+
+      const cacheKey = `${teamIndex}-${lastTwo}`;
+      if (colorCache.has(cacheKey)) return colorCache.get(cacheKey);
+
+      const color = generateForTeamAndDigits(teamIndex, lastTwo);
+      colorCache.set(cacheKey, color);
+      return color;
+    };
+
+    /**
+     * Legacy fallback: Get color by name (hash-based)
+     * Used when team/ticket info is not available
+     * @param {string} name - Worker/owner name
+     * @returns {{bg: string, fg: string}}
+     */
+    const get = (name) => {
+      if (!name) return { bg: '#374151', fg: '#fff' };
+
+      // Legacy hash-based generation for backwards compatibility
       let hash = 0;
       for (let i = 0; i < name.length; i += 1) {
         hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -1080,25 +1174,9 @@
       return { bg, fg };
     };
 
-    const get = (name) => {
-      if (!name) return { bg: '#374151', fg: '#fff' };
-      const store = ensureStore();
-      if (!store[name]) {
-        store[name] = generate(name);
-        savePrefs();
-      }
-      return store[name];
-    };
+    const clearCache = () => colorCache.clear();
 
-    const remove = (name) => {
-      const store = ensureStore();
-      if (store[name]) {
-        delete store[name];
-        savePrefs();
-      }
-    };
-
-    return { get, remove };
+    return { get, getForTicket, clearCache };
   })();
 
   /* =========================================================
@@ -1410,6 +1488,25 @@
       let discussions = parseCommentsCollection(props.Comments || props.comments);
       if (!discussions.length && existing.discussions) discussions = existing.discussions;
 
+      // Extract process number from UserOptions (NumerodoProcesso_c field)
+      let processNumber = '';
+      try {
+        const userOpts = props.UserOptions;
+        if (userOpts) {
+          let parsed = userOpts;
+          if (typeof userOpts === 'string') parsed = JSON.parse(userOpts);
+          if (parsed && Array.isArray(parsed.complexTypeProperties) && parsed.complexTypeProperties.length) {
+            const innerProps = parsed.complexTypeProperties[0]?.properties;
+            if (innerProps && innerProps.NumerodoProcesso_c) {
+              processNumber = String(innerProps.NumerodoProcesso_c).trim();
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[SMAX] Failed to parse UserOptions for process number:', err);
+      }
+      if (!processNumber && existing.processNumber) processNumber = existing.processNumber;
+
       const { assignmentGroupId, assignmentGroupName } = pickAssignmentGroupMeta(props, rel);
       triageCache.set(id, Object.assign({}, existing, {
         idText: id,
@@ -1426,7 +1523,8 @@
         requestedForName,
         discussions,
         assignmentGroupId,
-        assignmentGroupName
+        assignmentGroupName,
+        processNumber
       }));
     };
 
@@ -2450,23 +2548,17 @@
         const worker = TeamsConfig.suggestWorker(team, label);
         const owner = worker ? worker.name : null;
 
+        // Get deterministic color based on team and ticket ID
+        const teamId = team ? team.id : '';
+        const ticketColor = ColorRegistry.getForTicket({ teamId, ticketId: label });
+
         if (cell) {
           cell.classList.add('tmx-namecell');
           if (owner) {
-            const { bg, fg } = ColorRegistry.get(owner);
-            cell.style.background = bg;
-            cell.style.color = fg;
+            cell.style.background = ticketColor.bg;
+            cell.style.color = ticketColor.fg;
             cell.querySelectorAll('a').forEach((a) => { a.style.color = 'inherit'; });
           } else {
-            // Check if it's covered by ANY team we know? 
-            // If team is default (GERAL) and no worker found -> RED?
-            // If team is NOT default (e.g. JEC) and no worker found -> RED?
-            // User requirement: "GSE is not mattering. Only priority." -> Wait, user request said "GRID UI... GSE is not mattering. Only priority."
-            // BUT the User Request text was ambiguous: "GSE is not mattering. Only priority."
-            // AND "HUD: seems to be correct for now. This means you can reuse the assign logic to correct!"
-            // The user meant: "Currently in Grid UI, GSE is not mattering (bug). Only priority (bug or incomplete). HUD is correct (uses GSE). Reuse HUD logic."
-            // So my interpretation is correct: Make Grid UI respect GSE.
-
             cell.style.background = '#d32f2f';
             cell.style.color = '#fff';
             cell.querySelectorAll('a').forEach((a) => { a.style.color = 'inherit'; });
@@ -2480,10 +2572,9 @@
           tag.style.padding = '0 4px';
           tag.style.borderRadius = '4px';
           if (owner) {
-            const { bg, fg } = ColorRegistry.get(owner);
             tag.textContent = ` ${owner}`;
-            tag.style.background = bg;
-            tag.style.color = fg;
+            tag.style.background = ticketColor.bg;
+            tag.style.color = ticketColor.fg;
           } else {
             tag.textContent = ' SEM DONO';
             tag.style.background = '#fff';
@@ -2546,7 +2637,7 @@
               <div>
                 <strong style="font-size:13px;color:#333;">${Utils.escapeHtml(t.id || 'Sem ID')}</strong>
                 ${isDefault ? '<span style="font-size:10px;background:#ddd;padding:1px 4px;border-radius:3px;margin-left:4px;">Padrão</span>' : ''}
-                <div style="font-size:11px;color:#666;">Prioridade: ${t.priority || 0} • Matchers: ${t.matchers ? t.matchers.length : 0} • Workers: ${t.workers ? t.workers.length : 0}</div>
+                <div style="font-size:11px;color:#666;">Prioridade: ${t.priority || 0} • Membros: ${t.workers ? t.workers.length : 0}</div>
               </div>
               <div style="display:flex;gap:4px;">
                 <button class="smax-team-edit-btn" data-id="${t.id}" style="font-size:11px;padding:3px 8px;cursor:pointer;">Editar</button>
@@ -2898,9 +2989,41 @@
 
     const renderPanel = () => {
       if (!container) return;
+
+      // Triador selection UI - friendly and simple
+      const triadorName = prefs.myPersonName || '';
+      const triadorSection = `
+        <div style="margin-top:16px;padding:12px;border-radius:8px;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);border:1px solid #bae6fd;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span style="font-size:20px;">👤</span>
+            <div>
+              <div style="font-weight:600;color:#0369a1;font-size:14px;">Quem é você?</div>
+              <div style="font-size:11px;color:#64748b;">Seu nome será vinculado aos chamados globais</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:stretch;">
+            <div style="flex:1;position:relative;">
+              <input type="text" id="smax-triador-search" placeholder="Digite seu nome para buscar..." 
+                style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;">
+              <div id="smax-triador-results" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:250px;overflow-y:auto;background:#fff;border:1px solid #cbd5e1;border-top:none;border-radius:0 0 6px 6px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+            </div>
+            ${triadorName ? `
+              <div id="smax-triador-current" style="display:flex;align-items:center;padding:8px 14px;background:#0369a1;border-radius:6px;font-size:12px;color:#fff;font-weight:500;white-space:nowrap;">
+                ✓ ${Utils.escapeHtml(triadorName)}
+              </div>
+            ` : `
+              <div id="smax-triador-current" style="display:flex;align-items:center;padding:8px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:12px;color:#dc2626;white-space:nowrap;">
+                ⚠️ Não configurado
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
       container.innerHTML = `
         ${renderHeader()}
         ${renderTeamsList()}
+        ${triadorSection}
         
         <div id="smax-activity-log-panel" style="margin-top:20px;padding-top:10px;border-top:1px solid #eee;">
           <h4>📊 Registro de Atividades</h4>
@@ -2933,7 +3056,75 @@
     };
 
     const wirePanelEvents = () => {
-      // Cleaned up (RealWrites and SelfSelect removed)
+      if (!container) return;
+
+      // Triador search logic
+      const triadorSearch = container.querySelector('#smax-triador-search');
+      const triadorResults = container.querySelector('#smax-triador-results');
+      const triadorCurrent = container.querySelector('#smax-triador-current');
+
+      if (triadorSearch && triadorResults && triadorCurrent) {
+        const selectTriador = (personId, personName) => {
+          prefs.myPersonId = personId;
+          prefs.myPersonName = personName;
+          savePrefs();
+          triadorCurrent.textContent = personName || '(Não selecionado)';
+          triadorSearch.value = '';
+          triadorResults.style.display = 'none';
+        };
+
+        const renderTriadorResults = (query) => {
+          const q = (query || '').toUpperCase().trim();
+          if (!q) {
+            triadorResults.style.display = 'none';
+            return;
+          }
+
+          DataRepository.ensurePeopleLoaded();
+          const people = Array.from(DataRepository.peopleCache.values());
+
+          if (!people.length) {
+            triadorResults.innerHTML = '<div style="padding:8px;color:#999;font-size:11px;">Carregando pessoas...</div>';
+            triadorResults.style.display = 'block';
+            return;
+          }
+
+          const matches = people.filter(p =>
+            (p.name || '').toUpperCase().includes(q) ||
+            (p.upn || '').toUpperCase().includes(q)
+          ).slice(0, 10);
+
+          if (!matches.length) {
+            triadorResults.innerHTML = '<div style="padding:8px;color:#999;font-size:11px;">Nenhum resultado.</div>';
+          } else {
+            triadorResults.innerHTML = matches.map(p => `
+              <div class="smax-triador-pick" data-id="${p.id}" data-name="${Utils.escapeHtml(p.name)}" 
+                style="padding:6px 8px;cursor:pointer;font-size:11px;border-bottom:1px solid #f0f0f0;transition:background .1s;">
+                <div style="font-weight:500;">${Utils.escapeHtml(p.name)}</div>
+                <div style="color:#666;font-size:10px;">${Utils.escapeHtml(p.upn || p.id)}</div>
+              </div>
+            `).join('');
+
+            triadorResults.querySelectorAll('.smax-triador-pick').forEach(el => {
+              el.addEventListener('mouseenter', () => { el.style.background = '#f0f9ff'; });
+              el.addEventListener('mouseleave', () => { el.style.background = '#fff'; });
+              el.addEventListener('click', () => {
+                selectTriador(el.dataset.id, el.dataset.name);
+              });
+            });
+          }
+          triadorResults.style.display = 'block';
+        };
+
+        triadorSearch.addEventListener('input', () => renderTriadorResults(triadorSearch.value));
+        triadorSearch.addEventListener('focus', () => {
+          DataRepository.ensurePeopleLoaded();
+          if (triadorSearch.value) renderTriadorResults(triadorSearch.value);
+        });
+        triadorSearch.addEventListener('blur', () => {
+          setTimeout(() => { triadorResults.style.display = 'none'; }, 200);
+        });
+      }
     };
 
     const init = () => {
@@ -2948,7 +3139,7 @@
       container = document.createElement('div');
       container.id = 'smax-settings';
       Object.assign(container.style, {
-        position: 'fixed', right: '12px', bottom: '70px', maxWidth: '650px', maxHeight: '85vh', minHeight: '300px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '8px', background: '#fff', boxShadow: '0 6px 18px rgba(0,0,0,.25)', display: 'none'
+        position: 'fixed', right: '12px', bottom: '70px', minWidth: '420px', maxWidth: '650px', maxHeight: '85vh', minHeight: '300px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '8px', background: '#fff', boxShadow: '0 6px 18px rgba(0,0,0,.25)', display: 'none'
       });
       document.body.appendChild(container);
 
@@ -4333,25 +4524,28 @@
           : '';
         const vipBadge = full.isVip ? '<span style="margin-left:8px;padding:2px 6px;border-radius:999px;background:#facc15;color:#854d0e;font-size:11px;font-weight:700;">VIP</span>' : '';
         const requestedForHtml = full.requestedForName
-          ? `<div><strong>Solicitado para</strong> ${Utils.escapeHtml(full.requestedForName)}</div>`
+          ? `<span style="color:#64748b;">→</span> ${Utils.escapeHtml(full.requestedForName)}`
+          : '';
+        // Process number (optional field) - inline monospace text
+        const processNumberHtml = full.processNumber
+          ? `<span style="color:#64748b;">•</span> <span style="font-family:monospace;color:#a5b4fc;">${Utils.escapeHtml(full.processNumber)}</span>`
           : '';
         if (!ticketDetailsEl) return;
         const createdDisplay = formatBrazilianDateTime(full.createdTs, full.createdText);
         const descHtml = Utils.sanitizeRichText(full.descriptionHtml || full.descriptionText || full.subjectText || '');
-        const descDisplay = descHtml || `<div style="color:#94a3b8;">(Sem descrição disponível. Confira a coluna Descrição.)</div>`;
+        const descDisplay = descHtml || `<span style="color:#64748b;">(Sem descrição disponível)</span>`;
         const idLink = full.idText
-          ? `<a href="https://suporte.tjsp.jus.br/saw/Request/${encodeURIComponent(full.idText)}/general" target="_blank" rel="noreferrer noopener" style="color:#38bdf8;text-decoration:none;">${full.idText}</a>`
+          ? `<a href="https://suporte.tjsp.jus.br/saw/Request/${encodeURIComponent(full.idText)}/general" target="_blank" rel="noreferrer noopener" style="color:#38bdf8;text-decoration:none;font-weight:600;">${full.idText}</a>`
           : '-';
         ticketDetailsEl.innerHTML = `
-          <div style="display:flex;flex-direction:column;gap:6px;font-size:14px;">
-            ${warning}
-            <div class="smax-triage-meta-row">
-              <div><strong>ID</strong> ${idLink}${vipBadge ? ` ${vipBadge}` : ''}</div>
-              <div><strong>Hora de criação</strong> ${createdDisplay}</div>
-              ${requestedForHtml}
-            </div>
-            <div class="smax-triage-desc">${descDisplay}</div>
+          ${warning}
+          <div class="smax-triage-meta-row" style="flex-shrink:0;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:8px;">
+            ${idLink}${vipBadge}
+            <span style="color:#64748b;">${createdDisplay}</span>
+            ${requestedForHtml}
+            ${processNumberHtml}
           </div>
+          <div class="smax-triage-desc-scroll" style="flex:1;overflow-y:auto;color:#e2e8f0;font-size:14px;line-height:1.55;">${descDisplay}</div>
         `;
 
         if (discussionsEl) {
@@ -4633,14 +4827,24 @@
       const tasks = [];
       if (stagedState.urgency || props.ExpertAssignee || props.Solution || props.ExpertGroup) tasks.push(Api.postUpdateRequest(props));
       if (doGlobal) {
+        // When linking to a Global, assign the ticket to the triador (current user doing triage)
+        const triadorId = prefs.myPersonId;
+        const triadorName = prefs.myPersonName;
+
+        if (!triadorId) {
+          setStatus('⚠️ Triador não configurado! Vá em Settings para selecionar.', 4000);
+          return;
+        }
+
         tasks.push(
           Api.postCreateRequestCausesRequest(stagedState.parentId, props.Id).then((relRes) => {
             if (!(relRes && relRes.meta && relRes.meta.completion_status === 'OK')) return relRes;
-            // First update: set PhaseId and Status
+            // First update: set PhaseId, Status, AND assign to triador
             return Api.postUpdateRequest({
               Id: props.Id,
               PhaseId: 'Escalate',
-              Status: 'RequestStatusSuspended'
+              Status: 'RequestStatusSuspended',
+              ExpertAssignee: triadorId  // Assign to triador, not calculated owner
             }).then((firstUpdateRes) => {
               // Wait a couple seconds for server routine to complete, then set StatusSCCDSMAX_c
               // This prevents the server from overwriting it back to match the parent's status
@@ -4896,40 +5100,24 @@
               </div>
             </div>
             <div id="smax-triage-hud-footer">
-              <div class="smax-triage-top-row">
-                <div class="smax-triage-inline-controls">
-                  <div class="smax-triage-urg-group">
-                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-low" id="smax-triage-urg-low" disabled>Baixa</button>
-                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-med" id="smax-triage-urg-med" disabled>Média</button>
-                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-high" id="smax-triage-urg-high" disabled>Alta</button>
-                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
-                  </div>
-                  <div class="smax-triage-auto-panels">
-                    <div class="smax-triage-indicator" id="smax-triage-assign-panel" data-state="disabled" style="min-width:150px;">
-                      <span class="smax-indicator-label">Atribuição automática</span>
-                      <div style="display:flex;flex-direction:column;gap:3px;margin-top:2px;">
-                        <select id="smax-triage-team-select" class="smax-triage-select" disabled></select>
-                        <select id="smax-triage-worker-select" class="smax-triage-select" disabled></select>
-                      </div>
-                      <span class="smax-indicator-value" id="smax-triage-assign-value" style="display:none;">Sem dono configurado</span>
-                    </div>
-                    <div class="smax-triage-global-group">
-                      <input type="text" class="smax-global-input" id="smax-triage-global-id" placeholder="ID do global (cuidado)" inputmode="numeric" autocomplete="off" />
-                      <div class="smax-global-hint" id="smax-triage-global-hint">Sem vínculo global</div>
-                    </div>
-                  </div>
+              <div class="smax-triage-top-row" style="flex-wrap:nowrap;gap:14px;align-items:center;">
+                <div class="smax-triage-urg-group">
+                  <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-low" id="smax-triage-urg-low" disabled>Baixa</button>
+                  <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-med" id="smax-triage-urg-med" disabled>Média</button>
+                  <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-high" id="smax-triage-urg-high" disabled>Alta</button>
+                  <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
                 </div>
-                <div class="smax-triage-main-actions">
-                  <div id="smax-triage-real-flag" style="font-size:11px;font-weight:600;color:#f97316;display:none;">MODO REAL ATIVO</div>
-                  <div class="smax-triage-main-actions-buttons">
-                    <label class="smax-absent-wrapper" style="font-size:11px;color:#cbd5f5;margin-right:8px;" title="Marque se utilizou um script padrão para este atendimento">
-                      <input type="checkbox" id="smax-triage-used-script" class="smax-absent-input">
-                      <span class="smax-absent-box"></span>
-                      Script utilizado?
-                    </label>
-                    <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>ENVIAR</button>
-                  </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <select id="smax-triage-team-select" class="smax-triage-select" style="min-width:100px;" disabled></select>
+                  <select id="smax-triage-worker-select" class="smax-triage-select" style="min-width:140px;" disabled></select>
                 </div>
+                <input type="text" class="smax-global-input" id="smax-triage-global-id" placeholder="Global ID" inputmode="numeric" autocomplete="off" style="width:100px;" />
+                <div style="display:none;" id="smax-triage-real-flag"></div>
+                <div style="display:none;"><input type="checkbox" id="smax-triage-used-script"></div>
+                <span class="smax-indicator-value" id="smax-triage-assign-value" style="display:none;">Sem dono configurado</span>
+                <div id="smax-triage-assign-panel" data-state="disabled" style="display:none;"></div>
+                <div class="smax-global-hint" id="smax-triage-global-hint" style="display:none;"></div>
+                <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>ENVIAR</button>
               </div>
               <div id="smax-triage-quickreply-card" data-staged="false">
                 <textarea id="smax-triage-quickreply-editor" placeholder="Digite aqui sua resposta..."></textarea>
