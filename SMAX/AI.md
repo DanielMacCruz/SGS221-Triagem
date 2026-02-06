@@ -1,6 +1,6 @@
 # SMAX Triage Userscript - AI Context Document
 
-> **Last Updated:** 2026-02-05  
+> **Last Updated:** 2026-02-06  
 > **Main File:** `TRIAGEM - SMAX SGS221-0.1.user.js` (~5077 lines)
 
 ## Project Overview
@@ -65,6 +65,11 @@ TriageHUD.commit() → Api.postUpdateRequest() → SMAX API
 - ✅ Removed "Self-Assign" UI section
 - ✅ Activity logging with CSV export working
 - ✅ "Script utilizado?" checkbox functional
+- ✅ **Location-Based Routing**: Teams can now be matched by `locationName` (e.g., "Juizado Especial") regex.
+- ✅ **HUD Header Revamp**: Reordered logic: Meus Finais -> GSE -> Location -> Controls.
+- ✅ **Worker Staging Visuals**: Green glow on worker dropdown (`data-staged="true"`) when assignment is ready.
+- ✅ **Team Editor Polish**: "Add Manual" removed, GSE/Location editing blocked for 'geral' team.
+- ✅ **CSS Consistency**: Dark theme applied to dynamically added worker/GSE rows.
 
 ### Known Issues / Pending Work
 
