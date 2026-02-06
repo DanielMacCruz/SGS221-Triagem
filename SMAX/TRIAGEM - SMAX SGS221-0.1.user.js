@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TRIAGEM - SMAX SGS221
 // @namespace    https://github.com/DanielMacCruz/SGS221-Triagem
-// @version      0.6.1
+// @version      1.0
 // @description  Interface enhancements for triagem workflow
 // @author       YOU
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
@@ -47,8 +47,8 @@
           name: 'JEC / JUIZADO',
           priority: 10,
           matchers: [
-            { type: 'regex', pattern: 'JUIZADO\\\\s+ESPECIAL.*C[IÍ]VEL' },
-            { type: 'regex', pattern: '\\\\bJEC\\\\b' }
+            { type: 'regex', pattern: 'JUIZADO\\\\s+ESPECIAL.*C[IÍ]VEL', _displayText: 'JUIZADO ESPECIAL CÍVEL' },
+            { type: 'regex', pattern: '\\\\bJEC\\\\b', _displayText: 'JEC' }
           ],
           workers: []
         },
@@ -383,9 +383,10 @@
     .smax-triage-header-nav button:disabled { opacity:0.35; cursor:not-allowed; }
     #smax-triage-hud-main { display:flex; flex-direction:column; gap:12px; flex:1; min-width:0; }
     #smax-triage-hud-header { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 20px; background:linear-gradient(90deg,#0ea5e9 0%,#3b82f6 50%,#8b5cf6 100%); border-radius:16px 0 0 0; }
-    #smax-triage-hud-header h3 { margin:0; font-size:17px; font-weight:600; line-height:1.2; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.3); }
+    #smax-triage-location-display { font-size:11px; font-weight:400; color:#e2e8f0; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:default; background:rgba(0,0,0,0.35); border-radius:6px; padding:3px 8px; }
+    #smax-triage-location-display[data-empty="true"] { color:#94a3b8; font-style:italic; }
     #smax-triage-hud-header .smax-triage-title-bar { display:flex; align-items:center; gap:12px; flex:1; }
-    #smax-personal-finals-input { background:#0f172a; border:1px solid #1f2937; border-radius:999px; padding:2px 8px; color:#f8fafc; font-size:11px; min-width:120px; }
+    #smax-personal-finals-input { background:#0f172a; border:1px solid #1f2937; border-radius:999px; padding:2px 8px; color:#f8fafc; font-size:11px; min-width:60px; max-width:70px; }
     #smax-triage-gse-wrapper { position:relative; min-width:220px; display:flex; flex-direction:column; gap:4px; }
     #smax-triage-gse-display { width:100%; border-radius:10px; border:1px solid #1f2937; background:#0f172a; color:#f8fafc; font-size:12px; min-height:32px; padding:6px 32px 6px 12px; text-align:left; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease, color .15s ease; }
     #smax-triage-gse-display:disabled { opacity:0.6; cursor:not-allowed; }
@@ -429,6 +430,8 @@
     .smax-global-input[data-state="pending"] { border-color:#facc15; background:#422006; color:#fde68a; box-shadow:0 0 12px rgba(250,204,21,0.25); }
     .smax-global-hint { font-size:11px; color:#94a3b8; min-height:14px; }
     .smax-global-hint[data-state="staged"] { color:#4ade80; }
+    #smax-triage-worker-select[data-staged="true"] { border-color:#22c55e !important; box-shadow:0 0 12px rgba(34,197,94,0.4) !important; background:#052e16 !important; color:#bbf7d0 !important; }
+    #smax-triage-worker-select[data-staged="false"] { border-color:#facc15 !important; box-shadow:0 0 8px rgba(250,204,21,0.25) !important; }
     #smax-triage-guide-btn { padding:4px 10px; border-radius:999px; border:1px solid #374151; background:transparent; color:#cbd5f5; font-size:12px; cursor:pointer; }
     #smax-triage-guide-btn:hover { background:#1f2937; }
     #smax-quick-guide-panel { position:absolute; top:54px; right:20px; width:260px; background:#020617; border:1px solid #1f2937; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.55); padding:12px 14px; font-size:12px; color:#e2e8f0; display:none; z-index:5; }
@@ -966,9 +969,10 @@
       const gseId = ticket.assignmentGroupId || ticket.ExpertGroup || '';
       const gseName = (ticket.assignmentGroupName || '').toUpperCase();
 
-      // Combine text for matching: GSE Prio > Description > Subject
+      // Combine text for matching: GSE > Location > Description > Subject
       const matchText = [
         gseName,
+        ticket.locationName || '',
         ticket.descriptionText || '',
         ticket.subjectText || '',
         ticket.descriptionHtml || '' // sometimes raw html helps if text is missing
@@ -990,9 +994,7 @@
           if (team.gseIds.includes(gseId)) return team;
         }
 
-        // Check matchers (regex)
-        // REGEX is retired for now. We work exclusively with GSE currently but we will incorporate regex eventually.
-        /*
+        // Check matchers (regex) - location-based matching
         if (team.matchers && Array.isArray(team.matchers)) {
           for (const m of team.matchers) {
             if (m.type === 'regex' && m._regex) {
@@ -1000,7 +1002,6 @@
             }
           }
         }
-        */
 
         // Fallback: Check if Team ID or Name is contained in GSE Name (Loose match for "Work exclusively with GSE")
         if (gseName) {
@@ -1507,6 +1508,30 @@
       }
       if (!processNumber && existing.processNumber) processNumber = existing.processNumber;
 
+      // Extract RegisteredForLocation (read-only display)
+      let locationId = '';
+      let locationName = '';
+      const locationRel = rel && rel.RegisteredForLocation ? rel.RegisteredForLocation : null;
+      if (locationRel) {
+        locationId = locationRel.Id ? String(locationRel.Id) : '';
+        const locationCandidates = [
+          locationRel.DisplayLabel,
+          locationRel.Name,
+          locationRel.DisplayName,
+          locationRel.FullName
+        ];
+        for (const candidate of locationCandidates) {
+          if (!candidate) continue;
+          const trimmed = String(candidate).trim();
+          if (trimmed) {
+            locationName = trimmed;
+            break;
+          }
+        }
+      }
+      if (!locationId && existing.locationId) locationId = existing.locationId;
+      if (!locationName && existing.locationName) locationName = existing.locationName;
+
       const { assignmentGroupId, assignmentGroupName } = pickAssignmentGroupMeta(props, rel);
       triageCache.set(id, Object.assign({}, existing, {
         idText: id,
@@ -1524,7 +1549,9 @@
         discussions,
         assignmentGroupId,
         assignmentGroupName,
-        processNumber
+        processNumber,
+        locationId,
+        locationName
       }));
     };
 
@@ -2672,6 +2699,17 @@
         </div>
       `).join('');
 
+      const matchersHtml = (team.matchers || []).filter(m => m.type === 'regex').map((m, idx) => {
+        const displayText = m._displayText || m.pattern || '';
+        return `
+          <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;background:rgba(15,23,42,0.6);border:1px solid #475569;padding:6px 8px;border-radius:8px;">
+            <input type="hidden" class="smax-matcher-pattern" value="${Utils.escapeHtml(m.pattern || '')}">
+            <span style="flex:1;font-size:11px;color:#94a3b8;">contém: <strong style="color:#e5e7eb;">${Utils.escapeHtml(displayText)}</strong></span>
+            <button class="smax-matcher-del-btn" data-idx="${idx}" style="color:#fca5a5;border:none;background:rgba(220,38,38,.1);padding:4px 8px;border-radius:4px;cursor:pointer;transition:all .15s ease;">✕</button>
+          </div>
+        `;
+      }).join('');
+
       const workersHtml = (team.workers || []).map((w, idx) => `
         <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;background:rgba(15,23,42,0.6);border:1px solid #475569;padding:8px;border-radius:8px;">
           <input type="text" class="smax-worker-name" data-idx="${idx}" value="${Utils.escapeHtml(w.name || '')}" style="flex:1;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Nome do Responsável">
@@ -2714,6 +2752,20 @@
             </div>
 
             <div id="smax-gse-list">${gseHtml}</div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Local de Divulgação - Roteamento</div>
+            <div style="margin-bottom:6px;font-size:10px;color:#94a3b8;">Equipe será sugerida quando o local do chamado contiver o texto especificado (insensível a maiúsculas/minúsculas)</div>
+            
+            <!-- Location Matcher Input -->
+            <div style="margin-bottom:8px;border:1px solid #475569;background:#1e293b;border-radius:8px;padding:8px;display:flex;gap:6px;align-items:center;">
+              <input type="text" id="smax-team-location-input" placeholder="Ex: JUIZADO ESPECIAL CÍVEL" 
+                     style="flex:1;padding:6px 10px;border:1px solid #475569;border-radius:6px;font-size:11px;background:#0f172a;color:#e5e7eb;box-sizing:border-box;">
+              <button id="smax-add-location-matcher-btn" style="padding:6px 12px;background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3);border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;transition:all .15s ease;">+ Adicionar</button>
+            </div>
+
+            <div id="smax-matchers-list">${matchersHtml}</div>
           </div>
 
           <div style="margin-bottom:12px;">
@@ -2809,9 +2861,28 @@
               if (name) newWorkers.push({ name, digits, isAbsent });
             }
           });
+          // Sort workers alphabetically by name for better UX
+          newWorkers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }));
+
+          // Collect location matchers
+          const newMatchers = [];
+          container.querySelectorAll('#smax-matchers-list > div').forEach(div => {
+            const patternInput = div.querySelector('.smax-matcher-pattern');
+            if (patternInput) {
+              const pattern = patternInput.value.trim();
+              if (pattern) {
+                // Store both pattern and original text for display
+                newMatchers.push({
+                  type: 'regex',
+                  pattern: pattern,
+                  _displayText: pattern.replace(/\\/g, '') // Store unescaped for display
+                });
+              }
+            }
+          });
 
           // Update state
-          const newTeam = { id: newId, priority: newPrio, gseRules: newGseRules, workers: newWorkers };
+          const newTeam = { id: newId, name: newId, priority: newPrio, gseRules: newGseRules, workers: newWorkers, matchers: newMatchers };
 
           if (editingTeamId === '__NEW__') {
             currentTeams.push(newTeam);
@@ -2837,12 +2908,12 @@
           const tempDiv = document.createElement('div');
           tempDiv.style.display = 'flex';
           tempDiv.style.gap = '6px';
-          tempDiv.style.marginBottom = '4px';
+          tempDiv.style.marginBottom = '6px';
           tempDiv.style.alignItems = 'center';
           tempDiv.innerHTML = `
             <input type="hidden" class="smax-gse-id" value="${Utils.escapeHtml(id)}">
-            <input type="text" class="smax-gse-name" value="${Utils.escapeHtml(name)}" disabled style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">
-            <button class="smax-gse-del-btn" style="color:#d32f2f;border:none;background:none;cursor:pointer;">✕</button>
+            <input type="text" class="smax-gse-name" value="${Utils.escapeHtml(name)}" disabled style="flex:1;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:rgba(15,23,42,0.6);color:#94a3b8;">
+            <button class="smax-gse-del-btn" style="color:#fca5a5;border:none;background:rgba(220,38,38,.1);padding:4px 8px;border-radius:4px;cursor:pointer;transition:all .15s ease;">✕</button>
           `;
           tempDiv.querySelector('.smax-gse-del-btn').addEventListener('click', (e) => e.target.closest('div').remove());
           if (list) list.appendChild(tempDiv);
@@ -2896,6 +2967,44 @@
         // Existing deletes for initial render
         container.querySelectorAll('.smax-gse-del-btn').forEach(b => b.addEventListener('click', e => e.target.closest('div').remove()));
 
+        // --- Location Matcher Logic ---
+        const locationInput = container.querySelector('#smax-team-location-input');
+        const addLocationBtn = container.querySelector('#smax-add-location-matcher-btn');
+
+        if (addLocationBtn && locationInput) {
+          addLocationBtn.addEventListener('click', () => {
+            const text = locationInput.value.trim();
+            if (!text) return;
+
+            // Escape regex special characters except accents
+            // PT-BR: preserve á é í ó ú ã õ ç etc.
+            const escapedPattern = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+            const list = container.querySelector('#smax-matchers-list');
+            const tempDiv = document.createElement('div');
+            tempDiv.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:center;background:rgba(15,23,42,0.6);border:1px solid #475569;padding:6px 8px;border-radius:8px;';
+            tempDiv.innerHTML = `
+              <input type="hidden" class="smax-matcher-pattern" value="${Utils.escapeHtml(escapedPattern)}">
+              <span style="flex:1;font-size:11px;color:#94a3b8;">contém: <strong style="color:#e5e7eb;">${Utils.escapeHtml(text)}</strong></span>
+              <button class="smax-matcher-del-btn" style="color:#fca5a5;border:none;background:rgba(220,38,38,.1);padding:4px 8px;border-radius:4px;cursor:pointer;transition:all .15s ease;">✕</button>
+            `;
+            tempDiv.querySelector('.smax-matcher-del-btn').addEventListener('click', () => tempDiv.remove());
+            if (list) list.appendChild(tempDiv);
+            locationInput.value = '';
+          });
+
+          // Allow Enter key to add matcher
+          locationInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addLocationBtn.click();
+            }
+          });
+        }
+
+        // Existing matcher deletes for initial render
+        container.querySelectorAll('.smax-matcher-del-btn').forEach(b => b.addEventListener('click', () => b.closest('div').remove()));
+
         // --- Person Search Logic (Existing) ---
         const searchInput = container.querySelector('#smax-team-person-search');
         const resultsEl = container.querySelector('#smax-team-person-results');
@@ -2904,15 +3013,15 @@
           const list = container.querySelector('#smax-workers-list');
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = `
-            <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;background:#fff;border:1px solid #eee;padding:4px;border-radius:4px;">
-              <input type="text" class="smax-worker-name" value="${Utils.escapeHtml(name)}" style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="Nome">
-              <input type="text" class="smax-worker-digits" value="" style="width:80px;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="0-9">
+            <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;background:rgba(15,23,42,0.6);border:1px solid #475569;padding:8px;border-radius:8px;">
+              <input type="text" class="smax-worker-name" value="${Utils.escapeHtml(name)}" style="flex:1;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Nome do Responsável">
+              <input type="text" class="smax-worker-digits" value="" style="width:80px;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Digitos (ex: 0-9)">
               <div class="smax-worker-absent-wrapper" style="display:flex;align-items:center;cursor:pointer;user-select:none;">
                 <input type="checkbox" class="smax-worker-absent" style="display:none;">
-                <div class="smax-absent-fake" style="width:14px;height:14px;border:1px solid #999;margin-right:4px;background:#fff;border-radius:2px;display:flex;align-items:center;justify-content:center;"></div>
-                <span style="font-size:10px;color:#d32f2f;">Ausente</span>
+                <div class="smax-absent-fake" style="width:14px;height:14px;border:1px solid #64748b;margin-right:4px;background:transparent;border-radius:2px;display:flex;align-items:center;justify-content:center;"></div>
+                <span style="font-size:10px;color:#fca5a5;">Ausente</span>
               </div>
-              <button class="smax-remove-temp-row" style="color:#d32f2f;border:none;background:none;cursor:pointer;">✕</button>
+              <button class="smax-remove-temp-row" style="color:#fca5a5;border:none;background:rgba(220,38,38,.1);padding:4px 8px;border-radius:4px;cursor:pointer;transition:all .15s ease;">✕</button>
             </div>`;
           const row = tempDiv.firstElementChild;
           row.querySelector('.smax-remove-temp-row').addEventListener('click', () => row.remove());
@@ -2924,8 +3033,8 @@
 
           wrapper.addEventListener('click', () => {
             chk.checked = !chk.checked;
-            fake.style.background = chk.checked ? '#d32f2f' : '#fff';
-            fake.style.borderColor = chk.checked ? '#d32f2f' : '#999';
+            fake.style.background = chk.checked ? '#d32f2f' : 'transparent';
+            fake.style.borderColor = chk.checked ? '#d32f2f' : '#64748b';
           });
           if (list) list.appendChild(tempDiv.firstElementChild);
           // Clear search
@@ -4371,7 +4480,8 @@
       let html = '';
       teams.forEach(t => {
         const isSel = String(t.id) === String(selectedTeamId);
-        html += `<option value="${Utils.escapeHtml(t.id)}" ${isSel ? 'selected' : ''}>${Utils.escapeHtml(t.name)}</option>`;
+        const displayName = t.name || t.id || '(Sem nome)';
+        html += `<option value="${Utils.escapeHtml(t.id)}" ${isSel ? 'selected' : ''}>${Utils.escapeHtml(displayName)}</option>`;
       });
       select.innerHTML = html;
       select.disabled = false;
@@ -4567,6 +4677,21 @@
         populateTeamsDropdown(suggestedTeamId);
         populateWorkerDropdown(suggestedTeamId, suggestedWorker ? suggestedWorker.name : '');
 
+        // Update location display in header
+        const locationDisplayEl = backdrop.querySelector('#smax-triage-location-display');
+        if (locationDisplayEl) {
+          const locationName = full.locationName || '';
+          if (locationName) {
+            locationDisplayEl.textContent = locationName;
+            locationDisplayEl.title = `Local de divulgação: ${locationName}`;
+            locationDisplayEl.dataset.empty = 'false';
+          } else {
+            locationDisplayEl.textContent = 'Sem local';
+            locationDisplayEl.title = 'Local de divulgação não disponível';
+            locationDisplayEl.dataset.empty = 'true';
+          }
+        }
+
         // Sync assignment source-of-truth
         currentOwnerName = suggestedWorker ? suggestedWorker.name : '';
 
@@ -4652,6 +4777,13 @@
       const hasPerson = !!resolvedPersonId;
       const readyForOwner = hasOwner && hasPerson && urgencySet && !quickReplyDirty;
       stagedState.assign = readyForOwner;
+
+      // Update worker select staging visual
+      const workerSelect = backdrop.querySelector('#smax-triage-worker-select');
+      if (workerSelect) {
+        workerSelect.dataset.staged = readyForOwner ? 'true' : (hasOwner ? 'false' : '');
+      }
+
       if (assignPanel && assignValue) {
         assignPanel.title = hasOwner ? `Atribuir para ${owner}` : 'Sem dono configurado';
         if (!hasOwner) {
@@ -5052,7 +5184,7 @@
           <div id="smax-triage-hud-main">
             <div id="smax-triage-hud-header">
               <div class="smax-triage-title-bar">
-                <h3>Triagem de Chamados</h3>
+                <div id="smax-triage-location-display" data-empty="true" title="Local de divulgação">Sem local</div>
                 <label id="smax-personal-finals-label" title="Limite os chamados pelos seus dígitos finais">
                   <span>Meus finais</span>
                   <input type="text" id="smax-personal-finals-input" placeholder="0-32,66-99" inputmode="numeric" autocomplete="off" />
