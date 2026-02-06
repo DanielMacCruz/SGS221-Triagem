@@ -5087,7 +5087,7 @@
                 <li>Editar a resposta rápida já a deixa pronta; "ENVIAR" grava tudo no SMAX.</li>
                 <li>Filtre os chamados através do SMAX corretamente antes de começar a Triagem</li>
                 <li>Configure corretamente os finais e colegas ausentes através do ícone de configuração, no canto direito inferior do SMAX</li>
-                <li>No mesmo painel, escolha quem assume automaticamente após enviar respostas rápidas.</li>
+                <li>No mesmo painel, escolha quem assume automaticamente globais vinculados.</li>
                 <li>O filtro (não a coluna) "Hora de Criação" do SMAX permite escolher um intervalo de datas.</li>
                 <li>Os chamados são ordenados sempre por VIP, e mais antigos primeiro.</li>
                 <li>CUIDADO DOBRADO: Vincular Global NÃO VERIFICA se o número é válido.</li>
