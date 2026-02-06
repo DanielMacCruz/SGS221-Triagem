@@ -2691,6 +2691,7 @@
       const team = isNew ? { id: '', priority: 0, gseRules: [], workers: [] } : currentTeams.find(t => t.id === teamId);
       if (!team) return '<div>Equipe não encontrada. <button class="smax-cancel-edit">Voltar</button></div>';
 
+      const isGeneralTeam = team.id === 'geral';
       const gseHtml = (team.gseRules || []).map((r, idx) => `
         <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
           <input type="hidden" class="smax-gse-id" value="${Utils.escapeHtml(r.id)}">
@@ -2743,7 +2744,7 @@
 
           <div style="margin-bottom:12px;">
             <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Grupos de Suporte (GSE) - Roteamento</div>
-            
+            ${isGeneralTeam ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">⚠️ A equipe GERAL não permite edição de GSEs (aceita todos os grupos).</div>' : `
              <!-- GSE Search -->
             <div style="margin-bottom:8px;border:1px solid #475569;background:#1e293b;border-radius:8px;padding:8px;">
               <input type="text" id="smax-team-gse-search" placeholder="🔍 Buscar GSE para adicionar..." 
@@ -2751,11 +2752,12 @@
               <div id="smax-team-gse-results" style="max-height:100px;overflow-y:auto;border-top:1px solid #475569;display:none;background:#0f172a;"></div>
             </div>
 
-            <div id="smax-gse-list">${gseHtml}</div>
+            <div id="smax-gse-list">${gseHtml}</div>`}
           </div>
 
           <div style="margin-bottom:12px;">
             <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Local de Divulgação - Roteamento</div>
+            ${isGeneralTeam ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">⚠️ A equipe GERAL não permite edição de locais (aceita todos os locais).</div>' : `
             <div style="margin-bottom:6px;font-size:10px;color:#94a3b8;">Equipe será sugerida quando o local do chamado contiver o texto especificado (insensível a maiúsculas/minúsculas)</div>
             
             <!-- Location Matcher Input -->
@@ -2765,7 +2767,7 @@
               <button id="smax-add-location-matcher-btn" style="padding:6px 12px;background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3);border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;transition:all .15s ease;">+ Adicionar</button>
             </div>
 
-            <div id="smax-matchers-list">${matchersHtml}</div>
+            <div id="smax-matchers-list">${matchersHtml}</div>`}
           </div>
 
           <div style="margin-bottom:12px;">
@@ -2781,12 +2783,9 @@
             <div id="smax-workers-list">${workersHtml}</div>
           </div>
 
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap;">
-            <button id="smax-add-worker-btn" style="font-size:11px;padding:6px 12px;background:rgba(255,255,255,.05);color:#e5e7eb;border:1px solid rgba(255,255,255,.15);border-radius:6px;cursor:pointer;transition:all .15s ease;">+ Adicionar Manualmente</button>
-            <div style="display:flex;gap:8px;">
-              <button class="smax-cancel-edit" style="padding:8px 14px;cursor:pointer;background:rgba(255,255,255,.05);color:#e5e7eb;border:1px solid rgba(255,255,255,.15);border-radius:8px;font-size:12px;transition:all .15s ease;">Cancelar</button>
-              <button id="smax-save-team-btn" style="padding:8px 16px;cursor:pointer;background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;box-shadow:0 4px 16px rgba(34,197,94,.35);transition:transform .15s ease,box-shadow .15s ease;">Salvar Equipe</button>
-            </div>
+          <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap;">
+            <button class="smax-cancel-edit" style="padding:8px 14px;cursor:pointer;background:rgba(255,255,255,.05);color:#e5e7eb;border:1px solid rgba(255,255,255,.15);border-radius:8px;font-size:12px;transition:all .15s ease;">Cancelar</button>
+            <button id="smax-save-team-btn" style="padding:8px 16px;cursor:pointer;background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;box-shadow:0 4px 16px rgba(34,197,94,.35);transition:transform .15s ease,box-shadow .15s ease;">Salvar Equipe</button>
           </div>
         </div>
       `;
@@ -5184,7 +5183,6 @@
           <div id="smax-triage-hud-main">
             <div id="smax-triage-hud-header">
               <div class="smax-triage-title-bar">
-                <div id="smax-triage-location-display" data-empty="true" title="Local de divulgação">Sem local</div>
                 <label id="smax-personal-finals-label" title="Limite os chamados pelos seus dígitos finais">
                   <span>Meus finais</span>
                   <input type="text" id="smax-personal-finals-input" placeholder="0-32,66-99" inputmode="numeric" autocomplete="off" />
@@ -5200,6 +5198,7 @@
                     <div id="smax-triage-gse-empty">Nenhum GSE disponível.</div>
                   </div>
                 </div>
+                <div id="smax-triage-location-display" data-empty="true" title="Local de divulgação">Sem local</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <span class="smax-triage-header-nav">
