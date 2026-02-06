@@ -2616,9 +2616,9 @@
     };
 
     const renderHeader = () => `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div style="font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:#444;">
-          Configurações do Assistente
+      <div style="display:flex;justify-content:space-between;align-items:center;min-height:52px;padding:10px 20px;background:linear-gradient(90deg,#0ea5e9 0%,#3b82f6 50%,#8b5cf6 100%);border-radius:12px;margin:-16px -16px 16px -16px;">
+        <div style="font-weight:600;font-size:17px;letter-spacing:.03em;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.3);">
+          ⚙️ Configurações do Assistente
         </div>
       </div>`;
 
@@ -2632,16 +2632,16 @@
       const listHtml = currentTeams.map(t => {
         const isDefault = !!t.isDefault;
         return `
-          <div class="smax-team-item" style="border:1px solid #eee;border-radius:4px;padding:8px;margin-bottom:8px;background:#f9f9f9;">
+          <div class="smax-team-item" style="border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:linear-gradient(135deg,rgba(15,23,42,0.8) 0%,rgba(30,41,59,0.4) 100%);transition:border-color .15s ease,box-shadow .15s ease;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <div>
-                <strong style="font-size:13px;color:#333;">${Utils.escapeHtml(t.id || 'Sem ID')}</strong>
-                ${isDefault ? '<span style="font-size:10px;background:#ddd;padding:1px 4px;border-radius:3px;margin-left:4px;">Padrão</span>' : ''}
-                <div style="font-size:11px;color:#666;">Prioridade: ${t.priority || 0} • Membros: ${t.workers ? t.workers.length : 0}</div>
+                <strong style="font-size:13px;color:#f8fafc;">${Utils.escapeHtml(t.id || 'Sem ID')}</strong>
+                ${isDefault ? '<span style="font-size:10px;background:rgba(56,189,248,0.2);color:#38bdf8;padding:2px 6px;border-radius:999px;margin-left:6px;border:1px solid rgba(56,189,248,0.3);">Padrão</span>' : ''}
+                <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Prioridade: ${t.priority || 0} • Membros: ${t.workers ? t.workers.length : 0}</div>
               </div>
-              <div style="display:flex;gap:4px;">
-                <button class="smax-team-edit-btn" data-id="${t.id}" style="font-size:11px;padding:3px 8px;cursor:pointer;">Editar</button>
-                ${!isDefault ? `<button class="smax-team-del-btn" data-id="${t.id}" style="font-size:11px;padding:3px 8px;cursor:pointer;color:#d32f2f;">Remover</button>` : ''}
+              <div style="display:flex;gap:6px;">
+                <button class="smax-team-edit-btn" data-id="${t.id}" style="font-size:11px;padding:6px 12px;cursor:pointer;background:rgba(255,255,255,.05);color:#e5e7eb;border:1px solid rgba(255,255,255,.15);border-radius:6px;transition:all .15s ease;">Editar</button>
+                ${!isDefault ? `<button class="smax-team-del-btn" data-id="${t.id}" style="font-size:11px;padding:6px 12px;cursor:pointer;color:#fca5a5;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);border-radius:6px;transition:all .15s ease;">Remover</button>` : ''}
               </div>
             </div>
           </div>
@@ -2649,10 +2649,10 @@
       }).join('');
 
       return `
-        <div style="margin-top:16px;border-top:1px solid #eee;padding-top:12px;">
+        <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.1);padding-top:12px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <span style="font-weight:600;color:#444;">Equipes e Regras</span>
-            <button id="smax-add-team-btn" style="font-size:11px;padding:4px 8px;cursor:pointer;background:#2563eb;color:#fff;border:none;border-radius:4px;">+ Nova Equipe</button>
+            <span style="font-weight:600;color:#e5e7eb;font-size:14px;">Equipes e Regras</span>
+            <button id="smax-add-team-btn" style="font-size:12px;padding:6px 14px;cursor:pointer;background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);color:#fff;border:none;border-radius:8px;transition:transform .15s ease,box-shadow .15s ease;box-shadow:0 4px 12px rgba(59,130,246,.35);">+ Nova Equipe</button>
           </div>
           <div id="smax-teams-list-container">${listHtml}</div>
         </div>
@@ -2665,74 +2665,76 @@
       if (!team) return '<div>Equipe não encontrada. <button class="smax-cancel-edit">Voltar</button></div>';
 
       const gseHtml = (team.gseRules || []).map((r, idx) => `
-        <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;">
+        <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
           <input type="hidden" class="smax-gse-id" value="${Utils.escapeHtml(r.id)}">
-          <input type="text" class="smax-gse-name" value="${Utils.escapeHtml(r.name || r.id)}" disabled style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">
-          <button class="smax-gse-del-btn" style="color:#d32f2f;border:none;background:none;cursor:pointer;">✕</button>
+          <input type="text" class="smax-gse-name" value="${Utils.escapeHtml(r.name || r.id)}" disabled style="flex:1;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:rgba(15,23,42,0.6);color:#94a3b8;">
+          <button class="smax-gse-del-btn" style="color:#fca5a5;border:none;background:rgba(220,38,38,.1);padding:4px 8px;border-radius:4px;cursor:pointer;transition:all .15s ease;">✕</button>
         </div>
       `).join('');
 
       const workersHtml = (team.workers || []).map((w, idx) => `
-        <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;background:#fff;border:1px solid #eee;padding:4px;border-radius:4px;">
-          <input type="text" class="smax-worker-name" data-idx="${idx}" value="${Utils.escapeHtml(w.name || '')}" style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="Nome do Responsável">
-          <input type="text" class="smax-worker-digits" data-idx="${idx}" value="${Utils.escapeHtml(w.digits || '')}" style="width:80px;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="Digitos (ex: 0-9)">
+        <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;background:rgba(15,23,42,0.6);border:1px solid #475569;padding:8px;border-radius:8px;">
+          <input type="text" class="smax-worker-name" data-idx="${idx}" value="${Utils.escapeHtml(w.name || '')}" style="flex:1;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Nome do Responsável">
+          <input type="text" class="smax-worker-digits" data-idx="${idx}" value="${Utils.escapeHtml(w.digits || '')}" style="width:80px;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Digitos (ex: 0-9)">
           
           <div class="smax-worker-absent-wrapper" style="display:flex;align-items:center;cursor:pointer;user-select:none;">
              <input type="checkbox" class="smax-worker-absent" data-idx="${idx}" ${w.isAbsent ? 'checked' : ''} style="display:none;">
-             <div class="smax-absent-fake" style="width:14px;height:14px;border:1px solid ${w.isAbsent ? '#d32f2f' : '#999'};margin-right:4px;background:${w.isAbsent ? '#d32f2f' : '#fff'};border-radius:2px;display:flex;align-items:center;justify-content:center;"></div>
-             <span style="font-size:10px;color:#d32f2f;">Ausente</span>
+             <div class="smax-absent-fake" style="width:14px;height:14px;border:1px solid ${w.isAbsent ? '#d32f2f' : '#64748b'};margin-right:4px;background:${w.isAbsent ? '#d32f2f' : 'transparent'};border-radius:2px;display:flex;align-items:center;justify-content:center;"></div>
+             <span style="font-size:10px;color:#fca5a5;">Ausente</span>
           </div>
 
-          <button class="smax-worker-del-btn" data-idx="${idx}" style="color:#d32f2f;border:none;background:none;cursor:pointer;">✕</button>
+          <button class="smax-worker-del-btn" data-idx="${idx}" style="color:#fca5a5;border:none;background:rgba(220,38,38,.1);padding:4px 8px;border-radius:4px;cursor:pointer;transition:all .15s ease;">✕</button>
         </div>
       `).join('');
 
       return `
-        <div style="margin-top:16px;border:1px solid #blue;padding:10px;border-radius:6px;background:#f0f9ff;">
-          <div style="font-weight:600;margin-bottom:8px;color:#1e40af;">${isNew ? 'Criar Nova Equipe' : 'Editar Equipe ' + team.id}</div>
+        <div style="margin-top:16px;border:1px solid rgba(56,189,248,.3);padding:14px;border-radius:12px;background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);box-shadow:0 4px 16px rgba(0,0,0,.3);">
+          <div style="font-weight:600;margin-bottom:12px;color:#38bdf8;font-size:15px;">${isNew ? '✨ Criar Nova Equipe' : '✏️ Editar Equipe ' + team.id}</div>
           
-          <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px;">
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:12px;">
             <div>
-              <label style="display:block;font-size:10px;font-weight:600;">ID da Equipe (Nome)</label>
-              <input type="text" id="smax-edit-id" value="${Utils.escapeHtml(team.id || '')}" ${!isNew ? 'disabled' : ''} style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;">
+              <label style="display:block;font-size:11px;font-weight:600;color:#94a3b8;margin-bottom:4px;">ID da Equipe (Nome)</label>
+              <input type="text" id="smax-edit-id" value="${Utils.escapeHtml(team.id || '')}" ${!isNew ? 'disabled' : ''} style="width:100%;padding:8px 12px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#f8fafc;font-size:12px;transition:border-color .15s ease,box-shadow .15s ease;box-sizing:border-box;">
             </div>
             <div>
-              <label style="display:block;font-size:10px;font-weight:600;">Prioridade</label>
-              <input type="number" id="smax-edit-prio" value="${team.priority || 0}" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;">
+              <label style="display:block;font-size:11px;font-weight:600;color:#94a3b8;margin-bottom:4px;">Prioridade</label>
+              <input type="number" id="smax-edit-prio" value="${team.priority || 0}" style="width:100%;padding:8px 12px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#f8fafc;font-size:12px;transition:border-color .15s ease,box-shadow .15s ease;box-sizing:border-box;">
             </div>
           </div>
 
 
-          <div style="margin-bottom:10px;">
-            <div style="font-size:11px;font-weight:600;margin-bottom:4px;">Grupos de Suporte (GSE) - Roteamento</div>
+          <div style="margin-bottom:12px;">
+            <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Grupos de Suporte (GSE) - Roteamento</div>
             
              <!-- GSE Search -->
-            <div style="margin-bottom:8px;border:1px solid #e5e7eb;background:#fff;border-radius:4px;padding:6px;">
+            <div style="margin-bottom:8px;border:1px solid #475569;background:#1e293b;border-radius:8px;padding:8px;">
               <input type="text" id="smax-team-gse-search" placeholder="🔍 Buscar GSE para adicionar..." 
-                     style="width:100%;padding:4px 6px;border:1px solid #ccc;border-radius:3px;font-size:11px;margin-bottom:4px;">
-              <div id="smax-team-gse-results" style="max-height:100px;overflow-y:auto;border-top:1px solid #eee;display:none;"></div>
+                     style="width:100%;padding:6px 10px;border:1px solid #475569;border-radius:6px;font-size:11px;margin-bottom:4px;background:#0f172a;color:#e5e7eb;box-sizing:border-box;">
+              <div id="smax-team-gse-results" style="max-height:100px;overflow-y:auto;border-top:1px solid #475569;display:none;background:#0f172a;"></div>
             </div>
 
             <div id="smax-gse-list">${gseHtml}</div>
           </div>
 
-          <div style="margin-bottom:10px;">
-            <div style="font-size:11px;font-weight:600;margin-bottom:4px;">Membros e Distribuição</div>
+          <div style="margin-bottom:12px;">
+            <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Membros e Distribuição</div>
             
             <!-- Person Search for Adding Workers -->
-            <div style="margin-bottom:8px;border:1px solid #e5e7eb;background:#fff;border-radius:4px;padding:6px;">
+            <div style="margin-bottom:8px;border:1px solid #475569;background:#1e293b;border-radius:8px;padding:8px;">
               <input type="text" id="smax-team-person-search" placeholder="🔍 Buscar pessoa para adicionar..." 
-                     style="width:100%;padding:4px 6px;border:1px solid #ccc;border-radius:3px;font-size:11px;margin-bottom:4px;">
-              <div id="smax-team-person-results" style="max-height:100px;overflow-y:auto;border-top:1px solid #eee;display:none;"></div>
+                     style="width:100%;padding:6px 10px;border:1px solid #475569;border-radius:6px;font-size:11px;margin-bottom:4px;background:#0f172a;color:#e5e7eb;box-sizing:border-box;">
+              <div id="smax-team-person-results" style="max-height:100px;overflow-y:auto;border-top:1px solid #475569;display:none;background:#0f172a;"></div>
             </div>
 
             <div id="smax-workers-list">${workersHtml}</div>
-            <button id="smax-add-worker-btn" style="font-size:10px;padding:2px 6px;margin-top:4px;background:#e2e8f0;border:none;border-radius:3px;cursor:pointer;">+ Adicionar Manualmente</button>
           </div>
 
-          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
-            <button class="smax-cancel-edit" style="padding:4px 10px;cursor:pointer;background:#fff;border:1px solid #ccc;border-radius:4px;">Cancelar</button>
-            <button id="smax-save-team-btn" style="padding:4px 12px;cursor:pointer;background:#16a34a;color:#fff;border:none;border-radius:4px;">Salvar Equipe</button>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap;">
+            <button id="smax-add-worker-btn" style="font-size:11px;padding:6px 12px;background:rgba(255,255,255,.05);color:#e5e7eb;border:1px solid rgba(255,255,255,.15);border-radius:6px;cursor:pointer;transition:all .15s ease;">+ Adicionar Manualmente</button>
+            <div style="display:flex;gap:8px;">
+              <button class="smax-cancel-edit" style="padding:8px 14px;cursor:pointer;background:rgba(255,255,255,.05);color:#e5e7eb;border:1px solid rgba(255,255,255,.15);border-radius:8px;font-size:12px;transition:all .15s ease;">Cancelar</button>
+              <button id="smax-save-team-btn" style="padding:8px 16px;cursor:pointer;background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;box-shadow:0 4px 16px rgba(34,197,94,.35);transition:transform .15s ease,box-shadow .15s ease;">Salvar Equipe</button>
+            </div>
           </div>
         </div>
       `;
@@ -2993,26 +2995,26 @@
       // Triador selection UI - friendly and simple
       const triadorName = prefs.myPersonName || '';
       const triadorSection = `
-        <div style="margin-top:16px;padding:12px;border-radius:8px;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);border:1px solid #bae6fd;">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="margin-top:16px;padding:14px;border-radius:12px;background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);border:1px solid rgba(56,189,248,.2);box-shadow:0 4px 16px rgba(0,0,0,.3);">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
             <span style="font-size:20px;">👤</span>
             <div>
-              <div style="font-weight:600;color:#0369a1;font-size:14px;">Quem é você?</div>
-              <div style="font-size:11px;color:#64748b;">Seu nome será vinculado aos chamados globais</div>
+              <div style="font-weight:600;color:#38bdf8;font-size:15px;">Quem é você?</div>
+              <div style="font-size:11px;color:#94a3b8;">Seu nome será vinculado aos chamados globais</div>
             </div>
           </div>
-          <div style="display:flex;gap:10px;align-items:stretch;">
-            <div style="flex:1;position:relative;">
+          <div style="display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;">
+            <div style="flex:1;position:relative;min-width:200px;">
               <input type="text" id="smax-triador-search" placeholder="Digite seu nome para buscar..." 
-                style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;">
-              <div id="smax-triador-results" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:250px;overflow-y:auto;background:#fff;border:1px solid #cbd5e1;border-top:none;border-radius:0 0 6px 6px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+                style="width:100%;padding:10px 12px;border:1px solid #475569;border-radius:8px;font-size:13px;background:#1e293b;color:#f8fafc;transition:border-color .15s ease,box-shadow .15s ease;box-sizing:border-box;">
+              <div id="smax-triador-results" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:250px;overflow-y:auto;background:#020617;border:1px solid #475569;border-top:none;border-radius:0 0 8px 8px;z-index:100;box-shadow:0 12px 24px rgba(0,0,0,.5);"></div>
             </div>
             ${triadorName ? `
-              <div id="smax-triador-current" style="display:flex;align-items:center;padding:8px 14px;background:#0369a1;border-radius:6px;font-size:12px;color:#fff;font-weight:500;white-space:nowrap;">
+              <div id="smax-triador-current" style="display:flex;align-items:center;padding:8px 14px;background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);border-radius:8px;font-size:12px;color:#fff;font-weight:500;white-space:nowrap;box-shadow:0 4px 12px rgba(34,197,94,.35);flex-shrink:0;">
                 ✓ ${Utils.escapeHtml(triadorName)}
               </div>
             ` : `
-              <div id="smax-triador-current" style="display:flex;align-items:center;padding:8px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:12px;color:#dc2626;white-space:nowrap;">
+              <div id="smax-triador-current" style="display:flex;align-items:center;padding:8px 14px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.4);border-radius:8px;font-size:12px;color:#fca5a5;white-space:nowrap;flex-shrink:0;">
                 ⚠️ Não configurado
               </div>
             `}
@@ -3025,15 +3027,15 @@
         ${renderTeamsList()}
         ${triadorSection}
         
-        <div id="smax-activity-log-panel" style="margin-top:20px;padding-top:10px;border-top:1px solid #eee;">
-          <h4>📊 Registro de Atividades</h4>
-          <div class="smax-log-stats">
-            <span id="smax-log-count">${ActivityLog.getCount()}</span> entradas registradas
+        <div id="smax-activity-log-panel" style="margin-top:20px;padding:14px;border-top:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(15,23,42,0.6);">
+          <h4 style="margin:0 0 10px;font-size:15px;color:#e5e7eb;">📊 Registro de Atividades</h4>
+          <div class="smax-log-stats" style="margin-bottom:12px;font-size:12px;color:#94a3b8;">
+            <span id="smax-log-count" style="color:#38bdf8;font-weight:600;">${ActivityLog.getCount()}</span> entradas registradas
           </div>
-          <div class="smax-log-actions">
-            <button type="button" class="smax-log-btn smax-log-btn-primary" id="smax-log-export-all">📥 Exportar CSV</button>
-            <button type="button" class="smax-log-btn" id="smax-log-export-spreadsheet">Relatório</button>
-            <button type="button" class="smax-log-btn smax-log-btn-danger" id="smax-log-clear">🗑️ Limpar</button>
+          <div class="smax-log-actions" style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button type="button" style="padding:8px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);color:#fff;font-size:12px;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;box-shadow:0 4px 12px rgba(59,130,246,.35);font-weight:500;" id="smax-log-export-all">📥 Exportar CSV</button>
+            <button type="button" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;" id="smax-log-export-spreadsheet">Relatório</button>
+            <button type="button" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(220,38,38,.4);background:rgba(220,38,38,.15);color:#fca5a5;font-size:12px;cursor:pointer;transition:all .15s ease;" id="smax-log-clear">🗑️ Limpar</button>
           </div>
         </div>
       `;
@@ -3139,7 +3141,7 @@
       container = document.createElement('div');
       container.id = 'smax-settings';
       Object.assign(container.style, {
-        position: 'fixed', right: '12px', bottom: '70px', minWidth: '420px', maxWidth: '650px', maxHeight: '85vh', minHeight: '300px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '8px', background: '#fff', boxShadow: '0 6px 18px rgba(0,0,0,.25)', display: 'none'
+        position: 'fixed', right: '12px', bottom: '70px', minWidth: '420px', maxWidth: '650px', maxHeight: '85vh', minHeight: '300px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '16px', background: '#0f172a', boxShadow: '0 25px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08) inset', display: 'none', backdropFilter: 'blur(8px)', color: '#e5e7eb'
       });
       document.body.appendChild(container);
 
