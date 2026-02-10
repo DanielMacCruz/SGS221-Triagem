@@ -47,8 +47,7 @@
           name: 'JEC / JUIZADO',
           priority: 10,
           matchers: [
-            { type: 'regex', pattern: 'JUIZADO\\\\s+ESPECIAL.*C[IÍ]VEL', _displayText: 'JUIZADO ESPECIAL CÍVEL' },
-            { type: 'regex', pattern: '\\\\bJEC\\\\b', _displayText: 'JEC' }
+
           ],
           workers: []
         },
@@ -211,115 +210,6 @@
       triggerDownload(blob, 'triagem_log_padrao');
     };
 
-    const exportSpreadsheetCsv = () => {
-      if (!entries.length) {
-        alert('Nenhuma entrada para exportar.');
-        return;
-      }
-      // Header: EQUIPE, NOME, DIA, TIPO DE ATIVIDADE, HOUVE NECESSIDADE DE TESTES EM HML?, UTILIZADO SCRIPT DE ATENDIMENTO?, FOI CRIADO NOVO SCRIPT PARA ESTE ATENDIMENTO?, ENCAMINHAMENTO PARA OUTRA EQUIPE, DURAÇÃO, DESCRIÇÃO / OBS
-      const headers = [
-        'EQUIPE',
-        'NOME',
-        'DIA',
-        'TIPO DE ATIVIDADE',
-        'HOUVE NECESSIDADE DE TESTES EM HML?',
-        'UTILIZADO SCRIPT DE ATENDIMENTO?',
-        'FOI CRIADO NOVO SCRIPT PARA ESTE ATENDIMENTO?',
-        'ENCAMINHAMENTO PARA OUTRA EQUIPE',
-        'DURAÇÃO',
-        'DESCRIÇÃO / OBS'
-      ];
-
-      const rows = entries.map((e) => {
-        // Hardcoded:
-        const equipe = 'INTERNO 1G';
-        const nome = 'DANIEL MACEDO CRUZ';
-        const tipoAtividade = 'ATENDIMENTO DE CHAMADO OFFLINE';
-        const hml = 'NÃO';
-        const duracao = 'ATÉ 15 MIN';
-        const novoScript = 'NÃO';
-
-        // Derived:
-        const fullDate = formatDateBrazilian(e.ts);
-        const dia = fullDate.split(' ')[0] || ''; // Just the date part dd/mm/yyyy
-
-        const utilizadoScript = e.usedScript ? 'SIM' : 'NÃO'; // Assuming logic provided implied 'SIM' if checked
-
-        // Encaminhamento logic
-        let encaminhamento = '';
-        if (e.transferred) {
-          if (e.transferredTo.includes('STI 1 SUPORTE N3')) encaminhamento = 'STI (N3)';
-          else if (e.transferredTo.includes('STI 5.3')) encaminhamento = 'STI MIGRAÇÃO (STI 5)';
-          else encaminhamento = ''; // "blank will be for every other case" - assuming 'other case' of transferred or general?
-          // Re-reading: "blank will be for every other case" applies to the general logic.
-          // Wait, "ATENDIMENTO N2 (SEM ENCAMINHAMENTO)" is for every ticket that DIDN'T get transferred.
-        } else {
-          encaminhamento = 'ATENDIMENTO N2 (SEM ENCAMINHAMENTO)';
-        }
-
-        // Wait, user said:
-        // "ATENDIMENTO N2 (SEM ENCAMINHAMENTO)" is for every ticket that DIDN'T get transferred
-        // blank will be for every other case.
-        // Logic refinement:
-        // If !transferred => 'ATENDIMENTO N2 (SEM ENCAMINHAMENTO)'
-        // If transferred:
-        //    If target is 'GSE - STI 1 SUPORTE N3_eproc' => 'STI (N3)'
-        //    If target is 'GSE - STI 5.3 - Migração eproc' => 'STI MIGRAÇÃO (STI 5)'
-        //    Else => '' (blank)
-
-        if (!e.transferred) {
-          encaminhamento = 'ATENDIMENTO N2 (SEM ENCAMINHAMENTO)';
-        } else {
-          const target = (e.transferredTo || '').toUpperCase();
-          if (target.includes('STI 1 SUPORTE N3') || target.includes('STI 1 SUPORTE N3_EPROC')) {
-            encaminhamento = 'STI (N3)';
-          } else if (target.includes('STI 5.3') || target.includes('STI 5') && target.includes('MIGRA')) {
-            encaminhamento = 'STI MIGRAÇÃO (STI 5)';
-          } else {
-            encaminhamento = '';
-          }
-        }
-
-        // Descrição logic
-        // "Chamado xxxxxxx respondido."
-        // "Chamado xxxxx transferido."
-        // "Chamado xxxxxx vinculado ao global xxxxxxx"
-        // "Chamado xxxxx designado a LUCAS BARRETO..."
-        // Priority defaults to relevantWork logic often, but let's stick to the specific strings requested.
-        let descricao = '';
-        const tid = e.ticketId;
-        if (e.relevantWork === 'RESPONDIDO') {
-          descricao = `Chamado ${tid} respondido.`;
-        } else if (e.relevantWork === 'TRANSFERIDO') {
-          descricao = `Chamado ${tid} transferido para ${e.transferredTo || 'GSE não identificado'}.`;
-        } else if (e.relevantWork === 'VINCULO_GLOBAL') {
-          descricao = `Chamado ${tid} vinculado ao global ${e.globalChangeId}`;
-        } else if (e.relevantWork === 'DESIGNADO') {
-          descricao = `Chamado ${tid} designado a ${e.assignedTo}`;
-        } else {
-          // Fallback if none matches (e.g. just saved?)
-          descricao = `Chamado ${tid} processado.`;
-        }
-
-        return [
-          equipe,
-          nome,
-          dia,
-          tipoAtividade,
-          hml,
-          utilizadoScript,
-          novoScript,
-          encaminhamento,
-          duracao,
-          descricao
-        ].map(escapeCSV).join(',');
-      });
-
-      const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      triggerDownload(blob, 'triagem_relatorio_atividade');
-    };
-
     const triggerDownload = (blob, slug) => {
       const url = URL.createObjectURL(blob);
       const now = new Date();
@@ -348,7 +238,7 @@
 
     load();
 
-    return { log, exportCsv, exportSpreadsheetCsv, clear, getCount, getEntries, load };
+    return { log, exportCsv, clear, getCount, getEntries, load };
   })();
 
   /* =========================================================
@@ -519,7 +409,76 @@
     }
     .smax-triage-select:disabled { opacity: 0.5; cursor: not-allowed; }
     .smax-triage-select:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 8px rgba(56,189,248,.35); }
+
+    /* ── Settings panel · eye-comfort overrides ─────────────────
+       Optimised for cold-tone high-DPI Dell institutional monitors.
+       Warmer backgrounds, higher contrast borders, readable body text. */
+    #smax-settings {
+      background: #12161e !important;          /* warmer charcoal vs cold #0f172a */
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      letter-spacing: .01em;
+    }
+    #smax-settings *, #smax-settings *::placeholder {
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Brighter placeholder text (was invisible gray on dark) */
+    #smax-settings input::placeholder,
+    #smax-settings textarea::placeholder {
+      color: #8899aa !important;
+      opacity: 1 !important;
+    }
+    /* All input/textarea fields: warmer bg, brighter borders, bigger text */
+    #smax-settings input[type="text"],
+    #smax-settings input[type="number"],
+    #smax-settings textarea {
+      background: #1a2030 !important;          /* slightly warmer than #1e293b */
+      border-color: #566378 !important;        /* more visible than #475569 */
+      color: #edf0f4 !important;
+      font-size: 13px !important;
+      line-height: 1.5;
+    }
+    #smax-settings input:focus,
+    #smax-settings textarea:focus {
+      border-color: #6cb4d9 !important;        /* softer focus ring (less electric blue) */
+      box-shadow: 0 0 6px rgba(108,180,217,.30) !important;
+      outline: none;
+    }
+    /* Labels: warmer white instead of cool slate */
+    #smax-settings label {
+      color: #d0d7de !important;
+    }
+    /* Section headings */
+    #smax-settings [style*="font-weight:600"][style*="color:#e5e7eb"],
+    #smax-settings [style*="font-weight:600"][style*="color:#38bdf8"] {
+      text-shadow: 0 1px 2px rgba(0,0,0,.25);
+    }
+    /* Inner cards - warmer tint */
+    #smax-settings [style*="rgba(2,6,23"] {
+      background: rgba(18,22,30,0.92) !important;
+    }
+    #smax-settings [style*="rgba(15,23,42"] {
+      background: rgba(22,28,38,0.75) !important;
+    }
+    /* Borders: boost visibility across the board */
+    #smax-settings [style*="border:1px solid #475569"],
+    #smax-settings [style*="border: 1px solid #475569"],
+    #smax-settings [style*="border:1px solid rgba(255,255,255,.1)"] {
+      border-color: #566378 !important;
+    }
+    /* Team item cards */
+    #smax-settings .smax-team-item {
+      border-color: rgba(255,255,255,.14) !important;
+      background: linear-gradient(135deg,rgba(22,28,38,0.85) 0%,rgba(30,38,50,0.5) 100%) !important;
+    }
+    /* Buttons in the bottom action row */
+    #smax-settings button {
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
   `);
+
 
   /* ========================================================
    * Utilities
@@ -2575,15 +2534,14 @@
         const worker = TeamsConfig.suggestWorker(team, label);
         const owner = worker ? worker.name : null;
 
-        // Get deterministic color based on team and ticket ID
-        const teamId = team ? team.id : '';
-        const ticketColor = ColorRegistry.getForTicket({ teamId, ticketId: label });
+        // Get deterministic color based on owner name (same name = same color everywhere)
+        const ownerColor = owner ? ColorRegistry.get(owner) : null;
 
         if (cell) {
           cell.classList.add('tmx-namecell');
-          if (owner) {
-            cell.style.background = ticketColor.bg;
-            cell.style.color = ticketColor.fg;
+          if (owner && ownerColor) {
+            cell.style.background = ownerColor.bg;
+            cell.style.color = ownerColor.fg;
             cell.querySelectorAll('a').forEach((a) => { a.style.color = 'inherit'; });
           } else {
             cell.style.background = '#d32f2f';
@@ -2598,10 +2556,10 @@
           tag.style.fontWeight = '600';
           tag.style.padding = '0 4px';
           tag.style.borderRadius = '4px';
-          if (owner) {
+          if (owner && ownerColor) {
             tag.textContent = ` ${owner}`;
-            tag.style.background = ticketColor.bg;
-            tag.style.color = ticketColor.fg;
+            tag.style.background = ownerColor.bg;
+            tag.style.color = ownerColor.fg;
           } else {
             tag.textContent = ' SEM DONO';
             tag.style.background = '#fff';
@@ -2732,23 +2690,23 @@
           
           <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:12px;">
             <div>
-              <label style="display:block;font-size:11px;font-weight:600;color:#94a3b8;margin-bottom:4px;">ID da Equipe (Nome)</label>
-              <input type="text" id="smax-edit-id" value="${Utils.escapeHtml(team.id || '')}" ${!isNew ? 'disabled' : ''} style="width:100%;padding:8px 12px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#f8fafc;font-size:12px;transition:border-color .15s ease,box-shadow .15s ease;box-sizing:border-box;">
+              <label style="display:block;font-size:12px;font-weight:600;color:#cbd5e1;margin-bottom:4px;">Qual o nome da equipe?</label>
+              <input type="text" id="smax-edit-id" value="${Utils.escapeHtml(team.id || '')}" ${!isNew ? 'disabled' : ''} placeholder="Ex: JEC, Cível, Criminal..." style="width:100%;padding:8px 12px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#f8fafc;font-size:13px;transition:border-color .15s ease,box-shadow .15s ease;box-sizing:border-box;">
             </div>
             <div>
-              <label style="display:block;font-size:11px;font-weight:600;color:#94a3b8;margin-bottom:4px;">Prioridade</label>
-              <input type="number" id="smax-edit-prio" value="${team.priority || 0}" style="width:100%;padding:8px 12px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#f8fafc;font-size:12px;transition:border-color .15s ease,box-shadow .15s ease;box-sizing:border-box;">
+              <label style="display:block;font-size:12px;font-weight:600;color:#cbd5e1;margin-bottom:4px;">Prioridade</label>
+              <input type="number" id="smax-edit-prio" value="${team.priority || 0}" style="width:100%;padding:8px 12px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#f8fafc;font-size:13px;transition:border-color .15s ease,box-shadow .15s ease;box-sizing:border-box;">
             </div>
           </div>
 
 
           <div style="margin-bottom:12px;">
-            <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Grupos de Suporte (GSE) - Roteamento</div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Quais GSE a equipe atende?</div>
             ${isGeneralTeam ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">⚠️ A equipe GERAL não permite edição de GSEs (aceita todos os grupos).</div>' : `
              <!-- GSE Search -->
             <div style="margin-bottom:8px;border:1px solid #475569;background:#1e293b;border-radius:8px;padding:8px;">
               <input type="text" id="smax-team-gse-search" placeholder="🔍 Buscar GSE para adicionar..." 
-                     style="width:100%;padding:6px 10px;border:1px solid #475569;border-radius:6px;font-size:11px;margin-bottom:4px;background:#0f172a;color:#e5e7eb;box-sizing:border-box;">
+                     style="width:100%;padding:6px 10px;border:1px solid #475569;border-radius:6px;font-size:12px;margin-bottom:4px;background:#0f172a;color:#e5e7eb;box-sizing:border-box;">
               <div id="smax-team-gse-results" style="max-height:100px;overflow-y:auto;border-top:1px solid #475569;display:none;background:#0f172a;"></div>
             </div>
 
@@ -2756,14 +2714,14 @@
           </div>
 
           <div style="margin-bottom:12px;">
-            <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Local de Divulgação - Roteamento</div>
-            ${isGeneralTeam ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">⚠️ A equipe GERAL não permite edição de locais (aceita todos os locais).</div>' : `
-            <div style="margin-bottom:6px;font-size:10px;color:#94a3b8;">Equipe será sugerida quando o local do chamado contiver o texto especificado (insensível a maiúsculas/minúsculas)</div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Palavras-chave no campo "Local de Divulgação"</div>
+            ${isGeneralTeam ? '<div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">⚠️ A equipe GERAL não permite edição de locais (aceita todos os locais).</div>' : `
+            <div style="margin-bottom:6px;font-size:11px;color:#94a3b8;">Equipe será sugerida quando o local do chamado contiver o texto especificado (insensível a maiúsculas/minúsculas)</div>
             
             <!-- Location Matcher Input -->
             <div style="margin-bottom:8px;border:1px solid #475569;background:#1e293b;border-radius:8px;padding:8px;display:flex;gap:6px;align-items:center;">
               <input type="text" id="smax-team-location-input" placeholder="Ex: JUIZADO ESPECIAL CÍVEL" 
-                     style="flex:1;padding:6px 10px;border:1px solid #475569;border-radius:6px;font-size:11px;background:#0f172a;color:#e5e7eb;box-sizing:border-box;">
+                     style="flex:1;padding:6px 10px;border:1px solid #475569;border-radius:6px;font-size:12px;background:#0f172a;color:#e5e7eb;box-sizing:border-box;">
               <button id="smax-add-location-matcher-btn" style="padding:6px 12px;background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3);border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;transition:all .15s ease;">+ Adicionar</button>
             </div>
 
@@ -2771,12 +2729,12 @@
           </div>
 
           <div style="margin-bottom:12px;">
-            <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Membros e Distribuição</div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#e5e7eb;">Membros e Distribuição</div>
             
             <!-- Person Search for Adding Workers -->
             <div style="margin-bottom:8px;border:1px solid #475569;background:#1e293b;border-radius:8px;padding:8px;">
               <input type="text" id="smax-team-person-search" placeholder="🔍 Buscar pessoa para adicionar..." 
-                     style="width:100%;padding:6px 10px;border:1px solid #475569;border-radius:6px;font-size:11px;margin-bottom:4px;background:#0f172a;color:#e5e7eb;box-sizing:border-box;">
+                     style="width:100%;padding:6px 10px;border:1px solid #475569;border-radius:6px;font-size:12px;margin-bottom:4px;background:#0f172a;color:#e5e7eb;box-sizing:border-box;">
               <div id="smax-team-person-results" style="max-height:100px;overflow-y:auto;border-top:1px solid #475569;display:none;background:#0f172a;"></div>
             </div>
 
@@ -3135,34 +3093,147 @@
         ${renderTeamsList()}
         ${triadorSection}
         
-        <div id="smax-activity-log-panel" style="margin-top:20px;padding:14px;border-top:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(15,23,42,0.6);">
-          <h4 style="margin:0 0 10px;font-size:15px;color:#e5e7eb;">📊 Registro de Atividades</h4>
-          <div class="smax-log-stats" style="margin-bottom:12px;font-size:12px;color:#94a3b8;">
-            <span id="smax-log-count" style="color:#38bdf8;font-weight:600;">${ActivityLog.getCount()}</span> entradas registradas
+        <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;">
+          <button type="button" id="smax-log-export-all" style="padding:10px 18px;border-radius:8px;border:1px solid rgba(56,189,248,.2);background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;gap:6px;">
+            <span style="font-size:14px;">📊</span> Exportar logs <span style="color:#38bdf8;font-weight:600;">(${ActivityLog.getCount()})</span>
+          </button>
+          <button type="button" id="smax-config-toggle-btn" style="padding:10px 18px;border-radius:8px;border:1px solid rgba(56,189,248,.2);background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;gap:6px;">
+            <span style="font-size:14px;">🔧</span> Configuração manual
+          </button>
+        </div>
+
+        <div id="smax-config-editor-panel" style="display:none;margin-top:12px;padding:14px;border-radius:12px;background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);border:1px solid rgba(56,189,248,.2);box-shadow:0 4px 16px rgba(0,0,0,.3);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-size:11px;color:#94a3b8;">Edite o JSON abaixo e clique em Salvar. Copie para enviar a colegas.</div>
+            <button type="button" id="smax-config-close-btn" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;" title="Fechar">✕</button>
           </div>
-          <div class="smax-log-actions" style="display:flex;flex-wrap:wrap;gap:8px;">
-            <button type="button" style="padding:8px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);color:#fff;font-size:12px;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;box-shadow:0 4px 12px rgba(59,130,246,.35);font-weight:500;" id="smax-log-export-all">📥 Exportar CSV</button>
-            <button type="button" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;" id="smax-log-export-spreadsheet">Relatório</button>
-            <button type="button" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(220,38,38,.4);background:rgba(220,38,38,.15);color:#fca5a5;font-size:12px;cursor:pointer;transition:all .15s ease;" id="smax-log-clear">🗑️ Limpar</button>
+          <textarea id="smax-config-io-textarea" spellcheck="false"
+            style="width:100%;min-height:160px;max-height:400px;resize:vertical;padding:10px 12px;border:1px solid #475569;border-radius:8px;font-size:11px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;background:#1e293b;color:#e2e8f0;line-height:1.5;box-sizing:border-box;transition:border-color .15s ease;"></textarea>
+          <div id="smax-config-io-status" style="font-size:11px;color:#94a3b8;min-height:16px;margin:8px 0;"></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button type="button" id="smax-config-copy-btn" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;">📋 Copiar</button>
+            <button type="button" id="smax-config-save-btn" style="padding:8px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);color:#fff;font-size:12px;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;box-shadow:0 4px 12px rgba(34,197,94,.35);font-weight:500;">💾 Salvar</button>
           </div>
         </div>
       `;
       wirePanelEvents();
       wireTeamEvents();
-      wireLogPanelEvents();
+      wireBottomPanelEvents();
     };
 
-    const wireLogPanelEvents = () => {
-      if (!container) return;
-      const exportAllBtn = container.querySelector('#smax-log-export-all');
-      const clearBtn = container.querySelector('#smax-log-clear');
-      const countEl = container.querySelector('#smax-log-count');
-      const refreshLogCount = () => { if (countEl) countEl.textContent = String(ActivityLog.getCount()); };
+    // Shareable config keys (no personal identity — meant for team distribution)
+    const CONFIG_KEYS = [
+      'nameBadgesOn', 'collapseOn', 'enlargeCommentsOn', 'flagSkullOn',
+      'nameGroups', 'ausentes', 'nameColors', 'enableRealWrites',
+      'defaultGlobalChangeId', 'personalFinalsRaw', 'teamsConfigRaw'
+    ];
 
-      if (exportAllBtn) exportAllBtn.addEventListener('click', () => ActivityLog.exportCsv());
-      const exportSpreadsheetBtn = container.querySelector('#smax-log-export-spreadsheet');
-      if (exportSpreadsheetBtn) exportSpreadsheetBtn.addEventListener('click', () => ActivityLog.exportSpreadsheetCsv());
-      if (clearBtn) clearBtn.addEventListener('click', () => { if (ActivityLog.clear()) refreshLogCount(); });
+    const buildConfigJSON = () => {
+      const obj = {};
+      CONFIG_KEYS.forEach(key => {
+        if (prefs[key] === undefined) return;
+        if (key === 'teamsConfigRaw') {
+          try { obj.teams = JSON.parse(prefs[key]); } catch { obj.teams = prefs[key]; }
+        } else {
+          obj[key] = prefs[key];
+        }
+      });
+      obj._version = '1.0';
+      return JSON.stringify(obj, null, 2);
+    };
+
+    const applyConfigJSON = (raw) => {
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (err) {
+        return { ok: false, msg: `JSON inválido: ${err.message}` };
+      }
+      if (typeof parsed !== 'object' || parsed === null) {
+        return { ok: false, msg: 'O JSON deve ser um objeto { ... }.' };
+      }
+      let count = 0;
+      CONFIG_KEYS.forEach(key => {
+        if (key === 'teamsConfigRaw' && parsed.teams !== undefined) {
+          prefs.teamsConfigRaw = typeof parsed.teams === 'string'
+            ? parsed.teams
+            : JSON.stringify(parsed.teams);
+          count++;
+        } else if (parsed[key] !== undefined) {
+          prefs[key] = parsed[key];
+          count++;
+        }
+      });
+      if (!count) return { ok: false, msg: 'Nenhuma chave de configuração reconhecida.' };
+      savePrefs();
+      TeamsConfig.reload();
+      reloadConfig();
+      return { ok: true, msg: `${count} configurações aplicadas. ✓` };
+    };
+
+    const wireBottomPanelEvents = () => {
+      if (!container) return;
+
+      // --- Log export button ---
+      const logBtn = container.querySelector('#smax-log-export-all');
+      if (logBtn) logBtn.addEventListener('click', () => ActivityLog.exportCsv());
+
+      // --- Config editor toggle ---
+      const toggleBtn = container.querySelector('#smax-config-toggle-btn');
+      const editorPanel = container.querySelector('#smax-config-editor-panel');
+      const closeBtn = container.querySelector('#smax-config-close-btn');
+      const textarea = container.querySelector('#smax-config-io-textarea');
+      const statusEl = container.querySelector('#smax-config-io-status');
+      const copyBtn = container.querySelector('#smax-config-copy-btn');
+      const saveBtn = container.querySelector('#smax-config-save-btn');
+
+      const setIOStatus = (msg, color = '#94a3b8') => {
+        if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color; }
+      };
+
+      const openEditor = () => {
+        if (!editorPanel || !textarea) return;
+        textarea.value = buildConfigJSON();
+        editorPanel.style.display = 'block';
+        setIOStatus('');
+      };
+
+      const closeEditor = () => {
+        if (editorPanel) editorPanel.style.display = 'none';
+      };
+
+      if (toggleBtn) toggleBtn.addEventListener('click', () => {
+        if (editorPanel && editorPanel.style.display !== 'none') closeEditor();
+        else openEditor();
+      });
+
+      if (closeBtn) closeBtn.addEventListener('click', closeEditor);
+
+      if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+          if (!textarea || !textarea.value.trim()) return;
+          textarea.select();
+          navigator.clipboard.writeText(textarea.value).then(() => {
+            setIOStatus('Copiado! ✓', '#4ade80');
+          }).catch(() => {
+            document.execCommand('copy');
+            setIOStatus('Copiado! ✓', '#4ade80');
+          });
+        });
+      }
+
+      if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+          if (!textarea) return;
+          const raw = (textarea.value || '').trim();
+          if (!raw) { setIOStatus('O campo está vazio.', '#fca5a5'); return; }
+          const result = applyConfigJSON(raw);
+          if (!result.ok) { setIOStatus(result.msg, '#fca5a5'); return; }
+          setIOStatus(result.msg, '#4ade80');
+          // Re-render to reflect changes
+          setTimeout(() => renderPanel(), 300);
+        });
+      }
     };
 
     const wirePanelEvents = () => {
@@ -3249,7 +3320,7 @@
       container = document.createElement('div');
       container.id = 'smax-settings';
       Object.assign(container.style, {
-        position: 'fixed', right: '12px', bottom: '70px', minWidth: '420px', maxWidth: '650px', maxHeight: '85vh', minHeight: '300px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '16px', background: '#0f172a', boxShadow: '0 25px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08) inset', display: 'none', backdropFilter: 'blur(8px)', color: '#e5e7eb'
+        position: 'fixed', right: '12px', bottom: '70px', minWidth: '420px', maxWidth: '650px', maxHeight: '85vh', minHeight: '300px', overflow: 'auto', zIndex: 999999, padding: '16px', borderRadius: '16px', background: '#0f172a', boxShadow: '0 25px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08) inset', display: 'none', backdropFilter: 'blur(8px)', color: '#e5e7eb', fontSize: '14px'
       });
       document.body.appendChild(container);
 
@@ -4759,15 +4830,33 @@
       if (!backdrop) return;
       const assignPanel = backdrop.querySelector('#smax-triage-assign-panel');
       const assignValue = backdrop.querySelector('#smax-triage-assign-value');
-      const owner = currentOwnerName || ownerForCurrent();
-      const hasOwner = !!owner;
-      const ownerFirstName = hasOwner ? (owner.trim().split(/\s+/)[0] || owner) : '';
-      const assignDisplayName = ownerFirstName || owner || 'o dono configurado';
+
+      // Check if global parent is set — if so, ticket goes to triador, not digits-owner
+      const parentId = (stagedState.parentId || '').trim();
+      stagedState.parentId = parentId;
+      const hasParent = !!parentId;
+      stagedState.parentSelected = hasParent;
+
+      let effectiveOwner;
+      let effectiveDisplayName;
+      if (hasParent) {
+        // Global: ticket will be assigned to the triador (current user)
+        effectiveOwner = prefs.myPersonName || '';
+        const triadorFirst = effectiveOwner ? (effectiveOwner.trim().split(/\s+/)[0] || effectiveOwner) : '';
+        effectiveDisplayName = triadorFirst || 'você (triador)';
+      } else {
+        effectiveOwner = currentOwnerName || ownerForCurrent();
+        const ownerFirst = effectiveOwner ? (effectiveOwner.trim().split(/\s+/)[0] || effectiveOwner) : '';
+        effectiveDisplayName = ownerFirst || effectiveOwner || 'o dono configurado';
+      }
+
+      const hasOwner = !!effectiveOwner;
       const urgencySet = !!stagedState.urgency;
-      const resolvedPersonId = hasOwner ? resolvePersonIdByName(owner) : '';
+      const resolvedPersonId = hasOwner ? resolvePersonIdByName(effectiveOwner) : '';
       if (hasOwner) {
         console.debug('[SMAX][Triagem] Owner mapping check', {
-          owner,
+          owner: effectiveOwner,
+          isGlobal: hasParent,
           resolvedPersonId,
           peopleCacheSize: DataRepository.peopleCache.size
         });
@@ -4780,35 +4869,40 @@
       // Update worker select staging visual
       const workerSelect = backdrop.querySelector('#smax-triage-worker-select');
       if (workerSelect) {
-        workerSelect.dataset.staged = readyForOwner ? 'true' : (hasOwner ? 'false' : '');
+        if (hasParent) {
+          // Global mode: remove green glow from worker dropdown (it won't be used)
+          workerSelect.dataset.staged = '';
+        } else {
+          workerSelect.dataset.staged = readyForOwner ? 'true' : (hasOwner ? 'false' : '');
+        }
       }
 
       if (assignPanel && assignValue) {
-        assignPanel.title = hasOwner ? `Atribuir para ${owner}` : 'Sem dono configurado';
+        assignPanel.title = hasOwner ? `Atribuir para ${effectiveOwner}` : 'Sem dono configurado';
         if (!hasOwner) {
           assignPanel.dataset.state = 'disabled';
           assignValue.textContent = 'Sem dono configurado';
         } else if (!hasPerson) {
           assignPanel.dataset.state = 'pending';
-          assignValue.textContent = 'Carregando cadastro do dono...';
+          assignValue.textContent = hasParent
+            ? 'Carregando cadastro do triador...'
+            : 'Carregando cadastro do dono...';
         } else if (quickReplyDirty) {
           assignPanel.dataset.state = 'pending';
           assignValue.textContent = 'Resposta em edição — aguardando envio';
         } else if (!urgencySet) {
           assignPanel.dataset.state = 'pending';
-          assignValue.textContent = `Defina a urgência para ${assignDisplayName}`;
+          assignValue.textContent = `Defina a urgência para ${effectiveDisplayName}`;
         } else {
           assignPanel.dataset.state = 'staged';
-          assignValue.textContent = `Pronto para ${assignDisplayName}`;
+          assignValue.textContent = hasParent
+            ? `Global → atribuindo a ${effectiveDisplayName} (você)`
+            : `Pronto para ${effectiveDisplayName}`;
         }
       }
 
       const globalInput = backdrop.querySelector('#smax-triage-global-id');
       const globalHint = backdrop.querySelector('#smax-triage-global-hint');
-      const parentId = (stagedState.parentId || '').trim();
-      stagedState.parentId = parentId;
-      const hasParent = !!parentId;
-      stagedState.parentSelected = hasParent;
       if (globalInput) globalInput.dataset.state = hasParent ? 'staged' : 'inactive';
       if (globalHint) {
         if (hasParent) {
