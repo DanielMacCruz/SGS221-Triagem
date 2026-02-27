@@ -683,6 +683,45 @@
       }
     };
 
+    const normalizeText = (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+
+    const formatBrDate = (ts, fallbackText, options = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }, fallbackDefault = 'Faltando na visão') => {
+      if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+        try { return new Date(ts).toLocaleString('pt-BR', options); } catch { }
+      }
+      const parsed = parseSmaxDateTime(fallbackText || '');
+      if (parsed) {
+        try { return new Date(parsed).toLocaleString('pt-BR', options); } catch { }
+      }
+      return fallbackText || fallbackDefault;
+    };
+
+    const deepClone = (value) => {
+      if (Array.isArray(value)) return value.map((item) => deepClone(item));
+      if (value && typeof value === 'object') {
+        return Object.entries(value).reduce((acc, [key, val]) => {
+          acc[key] = deepClone(val);
+          return acc;
+        }, {});
+      }
+      return value;
+    };
+
+    const normalizeHtml = (html) => (html || '')
+      .replace(/\r/g, '')
+      .replace(/\u00a0/gi, ' ')
+      .trim();
+
+    const triggerFileDownload = (objectUrl, filename) => {
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename || 'anexo';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+    };
+
     return {
       debounce,
       getGridViewport,
@@ -698,7 +737,12 @@
       onDomReady,
       normalizeRequestId,
       normalizeAttachmentId,
-      toAbsoluteUrl
+      toAbsoluteUrl,
+      normalizeText,
+      formatBrDate,
+      deepClone,
+      normalizeHtml,
+      triggerFileDownload
     };
   })();
 
@@ -2018,7 +2062,56 @@
         });
     };
 
-    return { postUpdateRequest, postCreateRequestCausesRequest };
+    const extractBulkErrorMessages = (response) => {
+      if (!response) return ['SMAX não retornou resposta.'];
+      if (response.skipped) return [];
+      const messages = [];
+      const pushMessage = (value) => {
+        if (value == null) return;
+        const text = String(value).trim();
+        if (text) messages.push(text);
+      };
+      const harvest = (source) => {
+        if (!source) return;
+        if (Array.isArray(source)) {
+          source.forEach((entry) => harvest(entry));
+          return;
+        }
+        if (typeof source === 'object') {
+          pushMessage(source.message || source.detail || source.description || source.text || source.errorMessage || source.reason);
+          return;
+        }
+        pushMessage(source);
+      };
+      const meta = response.meta || {};
+      harvest(meta.errorDetailsList);
+      harvest(meta.errorDetails);
+      harvest(meta.errorDetailsMetaList);
+      harvest(meta.error_details_list);
+      harvest(meta.error_details);
+      harvest(response.errorDetailsList);
+      harvest(response.errorDetails);
+      pushMessage(meta.errorMessage || meta.error_message || meta.error);
+      pushMessage(response.message || response.error);
+      if (!messages.length && meta.completion_status && meta.completion_status !== 'OK') {
+        pushMessage(`Status: ${meta.completion_status}`);
+      }
+      return messages;
+    };
+
+    const summarizeBulkOutcome = (payload, index = 0) => {
+      if (payload && payload.skipped) return { ok: true, messages: [] };
+      const errors = extractBulkErrorMessages(payload);
+      const statusRaw = payload && payload.meta ? (payload.meta.completion_status || payload.meta.completionStatus) : '';
+      const normalizedStatus = typeof statusRaw === 'string' ? statusRaw.toUpperCase() : '';
+      const ok = normalizedStatus === 'OK' || (!normalizedStatus && !errors.length && !!payload);
+      if (ok) return { ok: true, messages: [] };
+      if (errors.length) return { ok: false, messages: errors };
+      if (!payload) return { ok: false, messages: ['SMAX não retornou resposta.'] };
+      return { ok: false, messages: [`Operação ${index + 1} falhou sem detalhes (status: ${normalizedStatus || 'desconhecido'}).`] };
+    };
+
+    return { postUpdateRequest, postCreateRequestCausesRequest, extractBulkErrorMessages, summarizeBulkOutcome };
   })();
 
   /* =========================================================
@@ -2424,16 +2517,6 @@
         throw lastError || new Error('Não consegui baixar este anexo.');
       };
 
-      const triggerFileDownload = (objectUrl, filename) => {
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        link.download = filename || 'anexo';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
-      };
-
       const open = async (attachment) => {
         if (!attachment || (!attachment.downloadUrl && !attachment.downloadCandidates)) {
           alert('Não consegui localizar o arquivo deste anexo.');
@@ -2451,7 +2534,7 @@
             return;
           }
           const { objectUrl } = await fetchBlobUrl(attachment);
-          triggerFileDownload(objectUrl, attachment.name);
+          Utils.triggerFileDownload(objectUrl, attachment.name);
         } catch (err) {
           alert('Erro ao abrir anexo: ' + err.message);
         }
@@ -2575,9 +2658,6 @@
     return { apply };
   })();
 
-  /* =========================================================
-   * Settings panel
-   * =======================================================*/
   /* =========================================================
    * Settings panel
    * =======================================================*/
@@ -3478,10 +3558,9 @@
    * Skull flag for detractor users
    * =======================================================*/
   const SkullFlag = (() => {
-    const normalize = (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
     const FLAG_SET = new Set([
       'Adriano Zilli', 'Adriana Da Silva Ferreira Oliveira', 'Alessandra Sousa Nunes', 'Bruna Marques Dos Santos', 'Breno Medeiros Malfati', 'Carlos Henrique Scala De Almeida', 'Cassia Santos Alves De Lima', 'Dalete Rodrigues Silva', 'David Lopes De Oliveira', 'Davi Dos Reis Garcia', 'Deaulas De Campos Salviano', 'Diego Oliveira Da Silva', 'Diogo Mendonça Aniceto', 'Elaine Moriya', 'Ester Naili Dos Santos', 'Fabiano Barbosa Dos Reis', 'Fabricio Christiano Tanobe Lyra', 'Gabriel Teixeira Ludvig', 'Gilberto Sintoni Junior', 'Giovanna Coradini Teixeira', 'Gislene Ferreira Sant\'Ana Ramos', 'Guilherme Cesar De Sousa', 'Gustavo De Meira Gonçalves', 'Jackson Alcantara Santana', 'Janaina Dos Passos Silvestre', 'Jefferson Silva De Carvalho Soares', 'Joyce Da Silva Oliveira', 'Juan Campos De Souza', 'Juliana Lino Dos Santos Rosa', 'Karina Nicolau Samaan', 'Karine Barbara Vitor De Lima Souza', 'Kaue Nunes Silva Farrelly', 'Kelly Ferreira De Freitas', 'Larissa Ferreira Fumero', 'Lucas Alves Dos Santos', 'Lucas Carneiro Peres Ferreira', 'Marcos Paulo Silva Madalena', 'Maria Fernanda De Oliveira Bento', 'Natalia Yurie Shiba', 'Paulo Roberto Massoca', 'Pedro Henrique Palacio Baritti', 'Rafaella Silva Lima Petrolini', 'Renata Aparecida Mendes Bonvechio', 'Rodrigo Silva Oliveira', 'Ryan Souza Carvalho', 'Tatiana Lourenço Da Costa Antunes', 'Tatiane Araujo Da Cruz', 'Thiago Tadeu Faustino De Oliveira', 'Tiago Carvalho De Freitas Meneses', 'Victor Viana Roca'
-    ].map(normalize));
+    ].map(Utils.normalizeText));
 
     const apply = (personItem) => {
       try {
@@ -3492,7 +3571,7 @@
           else break;
         }
         const leading = clone.textContent || '';
-        if (!FLAG_SET.has(normalize(leading))) return;
+        if (!FLAG_SET.has(Utils.normalizeText(leading))) return;
         const img = personItem.querySelector('img.ts-avatar, img.pl-shared-item-img, img.ts-image') || personItem.querySelector('img');
         if (img && img.dataset.__g1Applied !== '1') {
           img.dataset.__g1Applied = '1';
@@ -3608,11 +3687,7 @@
     let gseDropdownOpen = false;
     let gseOutsideHandler = null;
 
-    const normalizeSupportGroupText = (value) => (value || '')
-      .toString()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
+    const normalizeSupportGroupText = (value) => Utils.normalizeText(value).toLowerCase();
 
     const getSupportGroupFilterTokens = () => {
       const normalized = normalizeSupportGroupText(supportGroupFilter).trim();
@@ -3729,7 +3804,7 @@
         if (field) field.value = quickReplyHtml;
       }
       if (syncBaseline) {
-        editorBaselineHtml = normalizeHtml(quickReplyHtml);
+        editorBaselineHtml = Utils.normalizeHtml(quickReplyHtml);
         updateQuickReplyStageState();
       } else {
         syncBaselineFromEditor({ immediate: !quickReplyEditor });
@@ -3744,11 +3819,6 @@
       return field ? field.value : '';
     };
 
-    const normalizeHtml = (html) => (html || '')
-      .replace(/\r/g, '')
-      .replace(/\u00a0/gi, ' ')
-      .trim();
-
     const clearQuickReplyState = () => {
       setQuickReplyHtml('', { syncBaseline: true });
     };
@@ -3758,13 +3828,13 @@
       setQuickReplyHtml(safe, { syncBaseline: true });
     };
 
-    const hasUnsavedSolution = () => normalizeHtml(readQuickReplyHtml()) !== editorBaselineHtml;
+    const hasUnsavedSolution = () => Utils.normalizeHtml(readQuickReplyHtml()) !== editorBaselineHtml;
 
     const syncBaselineFromEditor = ({ immediate = false } = {}) => {
       if (baselineSyncTimer) clearTimeout(baselineSyncTimer);
       const apply = () => {
         baselineSyncTimer = null;
-        editorBaselineHtml = normalizeHtml(readQuickReplyHtml());
+        editorBaselineHtml = Utils.normalizeHtml(readQuickReplyHtml());
         updateQuickReplyStageState();
       };
       if (immediate || !quickReplyEditor) {
@@ -4084,17 +4154,6 @@
       return queue.filter((entry) => matchesPersonalFinals(entry));
     };
 
-    const deepClone = (value) => {
-      if (Array.isArray(value)) return value.map((item) => deepClone(item));
-      if (value && typeof value === 'object') {
-        return Object.entries(value).reduce((acc, [key, val]) => {
-          acc[key] = deepClone(val);
-          return acc;
-        }, {});
-      }
-      return value;
-    };
-
     const ensureSourceButton = (toolbar) => {
       if (!Array.isArray(toolbar)) return;
       const hasSource = toolbar.some((group) => {
@@ -4147,7 +4206,7 @@
         'enterMode', 'shiftEnterMode', 'removeButtons'
       ];
       keys.forEach((key) => {
-        if (source[key] !== undefined) cfg[key] = deepClone(source[key]);
+        if (source[key] !== undefined) cfg[key] = Utils.deepClone(source[key]);
       });
       if (cfg.toolbar) ensureSourceButton(cfg.toolbar);
       return cfg;
@@ -4244,7 +4303,7 @@
 
     const buildQuickReplyConfig = () => {
       const captured = captureQuickReplyConfig();
-      if (captured) return deepClone(captured);
+      if (captured) return Utils.deepClone(captured);
       const fallback = defaultQuickReplyConfig();
       ensureSourceButton(fallback.toolbar);
       if (!quickReplyFallbackNotified) {
@@ -4438,15 +4497,8 @@
       return worker ? worker.name : null;
     };
 
-    const normalizePersonName = (value) => (value || '')
-      .toString()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toUpperCase();
-
     const resolvePersonIdByName = (name) => {
-      const target = normalizePersonName(name);
+      const target = Utils.normalizeText(name);
       if (!target) return '';
       let resolved = '';
       DataRepository.peopleCache.forEach((person) => {
@@ -4456,52 +4508,16 @@
           [person.firstName, person.lastName].filter(Boolean).join(' '),
           person.DisplayLabel,
           person.FullName
-        ].find((entry) => entry && normalizePersonName(entry) === target);
+        ].find((entry) => entry && Utils.normalizeText(entry) === target);
         if (composite) resolved = String(person.id);
       });
       return resolved;
     };
 
-    const formatBrazilianDateTime = (ts, fallbackText) => {
-      const options = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
-      if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
-        try {
-          return new Date(ts).toLocaleString('pt-BR', options);
-        } catch { }
-      }
-      const parsed = Utils.parseSmaxDateTime(fallbackText || '');
-      if (parsed) {
-        try {
-          return new Date(parsed).toLocaleString('pt-BR', options);
-        } catch { }
-      }
-      return fallbackText || 'Faltando na visão';
+    const DISCUSSION_DATE_OPTIONS = {
+      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
     };
-
-    const formatDiscussionTimestamp = (ts, fallbackText) => {
-      const options = {
-        weekday: 'long',
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      };
-      if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
-        try {
-          return new Date(ts).toLocaleString('pt-BR', options);
-        } catch { }
-      }
-      const parsed = Utils.parseSmaxDateTime(fallbackText || '');
-      if (parsed) {
-        try {
-          return new Date(parsed).toLocaleString('pt-BR', options);
-        } catch { }
-      }
-      return fallbackText || 'Data desconhecida';
-    };
-
     const resolveSubmitterName = (entry) => {
       if (!entry) return '';
       if (entry.submitterDisplay) return entry.submitterDisplay;
@@ -4521,7 +4537,7 @@
         const privacy = Utils.escapeHtml(entry.privacyCode || '');
         const privacyLabel = Utils.escapeHtml(entry.privacyLabel || 'Interno');
         const bodyHtml = entry.bodyHtml || '<div style="color:#94a3b8;">(Sem conteúdo)</div>';
-        const timestamp = formatDiscussionTimestamp(entry.createdTs, entry.createdRaw);
+        const timestamp = Utils.formatBrDate(entry.createdTs, entry.createdRaw, DISCUSSION_DATE_OPTIONS, 'Data desconhecida');
         const name = resolveSubmitterName(entry);
         const author = entry.systemGenerated
           ? 'Gerado automaticamente'
@@ -4713,7 +4729,7 @@
           ? `<span style="color:#64748b;">•</span> <span style="font-family:monospace;color:#a5b4fc;">${Utils.escapeHtml(full.processNumber)}</span>`
           : '';
         if (!ticketDetailsEl) return;
-        const createdDisplay = formatBrazilianDateTime(full.createdTs, full.createdText);
+        const createdDisplay = Utils.formatBrDate(full.createdTs, full.createdText);
         const descHtml = Utils.sanitizeRichText(full.descriptionHtml || full.descriptionText || full.subjectText || '');
         const descDisplay = descHtml || `<span style="color:#64748b;">(Sem descrição disponível)</span>`;
         const idLink = full.idText
@@ -4837,18 +4853,10 @@
       const hasParent = !!parentId;
       stagedState.parentSelected = hasParent;
 
-      let effectiveOwner;
-      let effectiveDisplayName;
-      if (hasParent) {
-        // Global: ticket will be assigned to the triador (current user)
-        effectiveOwner = prefs.myPersonName || '';
-        const triadorFirst = effectiveOwner ? (effectiveOwner.trim().split(/\s+/)[0] || effectiveOwner) : '';
-        effectiveDisplayName = triadorFirst || 'você (triador)';
-      } else {
-        effectiveOwner = currentOwnerName || ownerForCurrent();
-        const ownerFirst = effectiveOwner ? (effectiveOwner.trim().split(/\s+/)[0] || effectiveOwner) : '';
-        effectiveDisplayName = ownerFirst || effectiveOwner || 'o dono configurado';
-      }
+      // Global or not, the owner is always the one chosen in the HUD dropdown
+      const effectiveOwner = currentOwnerName || ownerForCurrent();
+      const ownerFirst = effectiveOwner ? (effectiveOwner.trim().split(/\s+/)[0] || effectiveOwner) : '';
+      const effectiveDisplayName = ownerFirst || effectiveOwner || 'o dono configurado';
 
       const hasOwner = !!effectiveOwner;
       const urgencySet = !!stagedState.urgency;
@@ -4869,12 +4877,7 @@
       // Update worker select staging visual
       const workerSelect = backdrop.querySelector('#smax-triage-worker-select');
       if (workerSelect) {
-        if (hasParent) {
-          // Global mode: remove green glow from worker dropdown (it won't be used)
-          workerSelect.dataset.staged = '';
-        } else {
-          workerSelect.dataset.staged = readyForOwner ? 'true' : (hasOwner ? 'false' : '');
-        }
+        workerSelect.dataset.staged = readyForOwner ? 'true' : (hasOwner ? 'false' : '');
       }
 
       if (assignPanel && assignValue) {
@@ -4884,9 +4887,7 @@
           assignValue.textContent = 'Sem dono configurado';
         } else if (!hasPerson) {
           assignPanel.dataset.state = 'pending';
-          assignValue.textContent = hasParent
-            ? 'Carregando cadastro do triador...'
-            : 'Carregando cadastro do dono...';
+          assignValue.textContent = 'Carregando cadastro do dono...';
         } else if (quickReplyDirty) {
           assignPanel.dataset.state = 'pending';
           assignValue.textContent = 'Resposta em edição — aguardando envio';
@@ -4896,7 +4897,7 @@
         } else {
           assignPanel.dataset.state = 'staged';
           assignValue.textContent = hasParent
-            ? `Global → atribuindo a ${effectiveDisplayName} (você)`
+            ? `Global → atribuindo a ${effectiveDisplayName}`
             : `Pronto para ${effectiveDisplayName}`;
         }
       }
@@ -4961,55 +4962,6 @@
       setBaselineStatus();
     };
 
-    const extractBulkErrorMessages = (response) => {
-      if (!response) return ['SMAX não retornou resposta.'];
-      if (response.skipped) return [];
-      const messages = [];
-      const pushMessage = (value) => {
-        if (value == null) return;
-        const text = String(value).trim();
-        if (text) messages.push(text);
-      };
-      const harvest = (source) => {
-        if (!source) return;
-        if (Array.isArray(source)) {
-          source.forEach((entry) => harvest(entry));
-          return;
-        }
-        if (typeof source === 'object') {
-          pushMessage(source.message || source.detail || source.description || source.text || source.errorMessage || source.reason);
-          return;
-        }
-        pushMessage(source);
-      };
-      const meta = response.meta || {};
-      harvest(meta.errorDetailsList);
-      harvest(meta.errorDetails);
-      harvest(meta.errorDetailsMetaList);
-      harvest(meta.error_details_list);
-      harvest(meta.error_details);
-      harvest(response.errorDetailsList);
-      harvest(response.errorDetails);
-      pushMessage(meta.errorMessage || meta.error_message || meta.error);
-      pushMessage(response.message || response.error);
-      if (!messages.length && meta.completion_status && meta.completion_status !== 'OK') {
-        pushMessage(`Status: ${meta.completion_status}`);
-      }
-      return messages;
-    };
-
-    const summarizeBulkOutcome = (payload, index = 0) => {
-      if (payload && payload.skipped) return { ok: true, messages: [] };
-      const errors = extractBulkErrorMessages(payload);
-      const statusRaw = payload && payload.meta ? (payload.meta.completion_status || payload.meta.completionStatus) : '';
-      const normalizedStatus = typeof statusRaw === 'string' ? statusRaw.toUpperCase() : '';
-      const ok = normalizedStatus === 'OK' || (!normalizedStatus && !errors.length && !!payload);
-      if (ok) return { ok: true, messages: [] };
-      if (errors.length) return { ok: false, messages: errors };
-      if (!payload) return { ok: false, messages: ['SMAX não retornou resposta.'] };
-      return { ok: false, messages: [`Operação ${index + 1} falhou sem detalhes (status: ${normalizedStatus || 'desconhecido'}).`] };
-    };
-
     const commit = () => {
       const item = currentItem();
       if (!item) return;
@@ -5054,24 +5006,23 @@
       const tasks = [];
       if (stagedState.urgency || props.ExpertAssignee || props.Solution || props.ExpertGroup) tasks.push(Api.postUpdateRequest(props));
       if (doGlobal) {
-        // When linking to a Global, assign the ticket to the triador (current user doing triage)
-        const triadorId = prefs.myPersonId;
-        const triadorName = prefs.myPersonName;
+        // When linking to a Global, assign the ticket to the owner chosen in the HUD (dono dos finais)
+        const ownerId = stagedState.assignPersonId;
 
-        if (!triadorId) {
-          setStatus('⚠️ Triador não configurado! Vá em Settings para selecionar.', 4000);
+        if (!ownerId) {
+          setStatus('⚠️ Dono não encontrado! Verifique a configuração de equipes.', 4000);
           return;
         }
 
         tasks.push(
           Api.postCreateRequestCausesRequest(stagedState.parentId, props.Id).then((relRes) => {
             if (!(relRes && relRes.meta && relRes.meta.completion_status === 'OK')) return relRes;
-            // First update: set PhaseId, Status, AND assign to triador
+            // First update: set PhaseId, Status, AND assign to the chosen owner
             return Api.postUpdateRequest({
               Id: props.Id,
               PhaseId: 'Escalate',
               Status: 'RequestStatusSuspended',
-              ExpertAssignee: triadorId  // Assign to triador, not calculated owner
+              ExpertAssignee: ownerId  // Assign to dono dos finais
             }).then((firstUpdateRes) => {
               // Wait a couple seconds for server routine to complete, then set StatusSCCDSMAX_c
               // This prevents the server from overwriting it back to match the parent's status
@@ -5088,7 +5039,7 @@
         );
       }
       Promise.all(tasks).then((results) => {
-        const outcomes = results.map((payload, idx) => summarizeBulkOutcome(payload, idx));
+        const outcomes = results.map((payload, idx) => Api.summarizeBulkOutcome(payload, idx));
         const firstFailure = outcomes.find((entry) => !entry.ok);
         if (!firstFailure && props.Solution) {
           syncQuickReplyBaseline(props.Solution);
@@ -5423,33 +5374,7 @@
       rebuildQueueForPersonalFinals();
 
 
-      const teamSelect = backdrop.querySelector('#smax-triage-team-select');
-      if (teamSelect) {
-        teamSelect.addEventListener('change', () => {
-          stagedState.selectedTeamId = teamSelect.value;
-          // Suggest a worker for this team if available
-          // For now, logic: if team changed, valid worker for previous team is invalid for new team usually
-          // We can filter current ticket to suggest worker
-          // We can filter current ticket to suggest worker
-          const fullPayload = DataRepository.triageCache.get(activeTicketId); // Try to get full if available
-          const ticket = fullPayload || currentItem();
-          const ticketId = ticket ? (ticket.idText || String(ticket.idNum || '')) : '';
-          const team = TeamsConfig.getTeamById(teamSelect.value);
-          const suggestedWorker = TeamsConfig.suggestWorker(team, ticketId);
-          populateWorkerDropdown(teamSelect.value, suggestedWorker ? suggestedWorker.name : '');
-          refreshButtons();
-
-          setBaselineStatus();
-        });
-      }
-      const workerSelect = backdrop.querySelector('#smax-triage-worker-select');
-      if (workerSelect) {
-        workerSelect.addEventListener('change', () => {
-          stagedState.selectedWorkerId = workerSelect.value;
-          refreshButtons();
-          setBaselineStatus();
-        });
-      }
+      // NOTE: team/worker select event handlers are wired inside render() with dataset.wired guards
 
       const guideBtn = backdrop.querySelector('#smax-triage-guide-btn');
       if (guideBtn) guideBtn.addEventListener('click', (evt) => {
