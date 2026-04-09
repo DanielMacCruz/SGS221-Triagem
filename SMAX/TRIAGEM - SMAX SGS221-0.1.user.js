@@ -322,19 +322,22 @@
     .smax-global-hint[data-state="staged"] { color:#4ade80; }
     #smax-triage-worker-select[data-staged="true"] { border-color:#22c55e !important; box-shadow:0 0 12px rgba(34,197,94,0.4) !important; background:#052e16 !important; color:#bbf7d0 !important; }
     #smax-triage-worker-select[data-staged="false"] { border-color:#facc15 !important; box-shadow:0 0 8px rgba(250,204,21,0.25) !important; }
-    #smax-triage-status-badge { font-size:11px; font-weight:600; color:#e2e8f0; background:rgba(0,0,0,0.35); border-radius:6px; padding:3px 10px; white-space:nowrap; cursor:default; transition:background .2s ease, color .2s ease; }
-    #smax-triage-status-badge[data-empty="true"] { color:#64748b; font-style:italic; font-weight:400; }
-    #smax-triage-status-badge[data-status="RequestStatusSuspended"] { background:rgba(250,204,21,0.2); color:#fde68a; }
-    #smax-triage-status-badge[data-status="RequestStatusActive"] { background:rgba(34,197,94,0.2); color:#bbf7d0; }
-    #smax-triage-status-badge[data-status="RequestStatusComplete"] { background:rgba(59,130,246,0.2); color:#bfdbfe; }
-    #smax-triage-status-badge[data-status="RequestStatusAccepted"] { background:rgba(34,197,94,0.15); color:#a7f3d0; }
-    #smax-triage-status-badge[data-status="RequestStatusReject"] { background:rgba(239,68,68,0.2); color:#fecaca; }
-    #smax-triage-status-badge[data-status="RequestStatusAbandon"] { background:rgba(239,68,68,0.15); color:#fca5a5; }
-    #smax-triage-status-badge[data-status="RequestStatusPendingVendor"],
-    #smax-triage-status-badge[data-status="RequestStatusPendingApproval"],
-    #smax-triage-status-badge[data-status="RequestStatusPendingCustomer"],
-    #smax-triage-status-badge[data-status="RequestStatusPendingChange"] { background:rgba(251,146,60,0.2); color:#fed7aa; }
-    #smax-triage-status-badge[data-status="RequestStatusClassify"] { background:rgba(168,85,247,0.2); color:#e9d5ff; }
+    .smax-triage-status-dropdown { font-size:11px; font-weight:600; min-width:110px; max-width:180px; padding:3px 24px 3px 8px !important; border-radius:6px; background-color:rgba(0,0,0,0.35); color:#e2e8f0; border:1px solid rgba(255,255,255,.15); cursor:pointer; transition:background .2s ease, color .2s ease, border-color .2s ease; }
+    .smax-triage-status-dropdown:disabled { opacity:0.5; cursor:not-allowed; }
+    .smax-triage-status-dropdown[data-status="RequestStatusSuspended"] { background-color:rgba(250,204,21,0.25) !important; color:#fde68a !important; border-color:rgba(250,204,21,0.5) !important; }
+    .smax-triage-status-dropdown[data-status="RequestStatusActive"],
+    .smax-triage-status-dropdown[data-status="RequestStatusInProgress"] { background-color:rgba(34,197,94,0.2) !important; color:#bbf7d0 !important; border-color:rgba(34,197,94,0.4) !important; }
+    .smax-triage-status-dropdown[data-status="RequestStatusComplete"] { background-color:rgba(59,130,246,0.2) !important; color:#bfdbfe !important; border-color:rgba(59,130,246,0.4) !important; }
+    .smax-triage-status-dropdown[data-status="RequestStatusReady"] { background-color:rgba(34,197,94,0.15) !important; color:#a7f3d0 !important; border-color:rgba(34,197,94,0.3) !important; }
+    .smax-triage-status-dropdown[data-status="RequestStatusReject"],
+    .smax-triage-status-dropdown[data-status="RequestStatusAbandon"] { background-color:rgba(239,68,68,0.2) !important; color:#fecaca !important; border-color:rgba(239,68,68,0.4) !important; }
+    .smax-triage-status-dropdown[data-status="RequestStatusPending"],
+    .smax-triage-status-dropdown[data-status="RequestStatusPendingCustomer"],
+    .smax-triage-status-dropdown[data-status="RequestStatusPendingApproval"],
+    .smax-triage-status-dropdown[data-status="RequestStatusPendingChange"] { background-color:rgba(251,146,60,0.2) !important; color:#fed7aa !important; border-color:rgba(251,146,60,0.4) !important; }
+    .smax-triage-status-dropdown[data-status="RequestStatusClassify"] { background-color:rgba(168,85,247,0.2) !important; color:#e9d5ff !important; border-color:rgba(168,85,247,0.4) !important; }
+    #smax-triage-commit[data-suspended="true"] { background:linear-gradient(135deg,#facc15 0%,#eab308 100%) !important; color:#111827 !important; box-shadow:0 4px 16px rgba(250,204,21,.45) !important; }
+    #smax-triage-commit[data-suspended="true"]:hover { box-shadow:0 8px 24px rgba(250,204,21,.55) !important; }
     .smax-triage-primary { padding:10px 20px; border-radius:10px; border:none; cursor:pointer; background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%); color:#fff; font-weight:600; font-size:14px; box-shadow:0 4px 16px rgba(34,197,94,.35); transition:transform .15s ease, box-shadow .15s ease; }
     .smax-triage-primary:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(34,197,94,.45); }
     .smax-triage-secondary { padding:8px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.15); background:rgba(255,255,255,.05); color:#e5e7eb; cursor:pointer; font-size:13px; transition:all .15s ease; }
@@ -3709,7 +3712,8 @@
       assignmentGroupName: '',
       assignmentGroupSelected: false,
       selectedTeamId: '',
-      selectedWorkerId: ''
+      selectedWorkerId: '',
+      stagedStatus: ''  // raw SMAX status key chosen by the user, empty = no change
     };
     let quickReplyHtml = '';
     let quickReplyEditor = null;
@@ -3856,12 +3860,24 @@
       RequestStatusReady: 'Pronto'
     };
 
+    // Statuses exposed to the user in the dropdown (subset of the full map)
+    const EDITABLE_STATUSES = [
+      'RequestStatusSuspended',
+      'RequestStatusInProgress',
+      'RequestStatusReady',
+      'RequestStatusPending',
+      'RequestStatusReject',
+      'RequestStatusComplete'
+    ];
+
     const humanReadableStatus = (raw) => {
       if (!raw) return '';
       if (REQUEST_STATUS_MAP[raw]) return REQUEST_STATUS_MAP[raw];
       // Fallback: strip 'RequestStatus' prefix and add spaces before capitals
       return raw.replace(/^RequestStatus/i, '').replace(/([a-z])([A-Z])/g, '$1 $2');
     };
+
+    let currentTicketOriginalStatus = ''; // tracks the ticket's API status so user can revert
 
     const getQuickReplyField = () => (backdrop ? backdrop.querySelector('#smax-triage-quickreply-editor') : null);
 
@@ -4533,6 +4549,8 @@
       stagedState.assignmentGroupSelected = false;
       stagedState.selectedTeamId = '';
       stagedState.selectedWorkerId = '';
+      stagedState.stagedStatus = '';
+      currentTicketOriginalStatus = '';
       const ck = backdrop.querySelector('#smax-triage-used-script');
       if (ck) ck.checked = false;
     };
@@ -4542,6 +4560,7 @@
       || stagedState.assign
       || stagedState.parentSelected
       || stagedState.assignmentGroupSelected
+      || stagedState.stagedStatus
       || hasUnsavedSolution()
     );
 
@@ -4711,8 +4730,8 @@
         activeTicketId = null;
         clearQuickReplyState();
         updateAttachmentPanel({ state: 'empty', items: [] });
-        const statusBadge = backdrop.querySelector('#smax-triage-status-badge');
-        if (statusBadge) { statusBadge.textContent = '—'; statusBadge.dataset.empty = 'true'; statusBadge.dataset.status = ''; statusBadge.title = ''; }
+        const statusSelect = backdrop.querySelector('#smax-triage-status-select');
+        if (statusSelect) { statusSelect.innerHTML = ''; statusSelect.disabled = true; statusSelect.dataset.status = ''; }
         return;
       }
 
@@ -4837,21 +4856,39 @@
           }
         }
 
-        // Update status display in header
-        const statusDisplayEl = backdrop.querySelector('#smax-triage-status-badge');
-        if (statusDisplayEl) {
+        // Update status dropdown in header
+        const statusSelect = backdrop.querySelector('#smax-triage-status-select');
+        if (statusSelect) {
           const rawStatus = full.status || '';
-          if (rawStatus) {
-            const label = humanReadableStatus(rawStatus);
-            statusDisplayEl.textContent = label;
-            statusDisplayEl.title = `Status: ${label} (${rawStatus})`;
-            statusDisplayEl.dataset.empty = 'false';
-            statusDisplayEl.dataset.status = rawStatus;
-          } else {
-            statusDisplayEl.textContent = '';
-            statusDisplayEl.title = '';
-            statusDisplayEl.dataset.empty = 'true';
-            statusDisplayEl.dataset.status = '';
+          currentTicketOriginalStatus = rawStatus;
+          stagedState.stagedStatus = ''; // reset on ticket change
+
+          // Build options: original status (if not in editable list) + editable statuses
+          let optionsHtml = '';
+          const editableSet = new Set(EDITABLE_STATUSES);
+          if (rawStatus && !editableSet.has(rawStatus)) {
+            // The ticket has a status not in our editable list — show it as "current" option
+            optionsHtml += `<option value="${Utils.escapeHtml(rawStatus)}" selected>${Utils.escapeHtml(humanReadableStatus(rawStatus))} (atual)</option>`;
+          }
+          EDITABLE_STATUSES.forEach(key => {
+            const isCurrent = key === rawStatus;
+            optionsHtml += `<option value="${Utils.escapeHtml(key)}" ${isCurrent ? 'selected' : ''}>${Utils.escapeHtml(humanReadableStatus(key))}</option>`;
+          });
+          statusSelect.innerHTML = optionsHtml;
+          statusSelect.disabled = false;
+          statusSelect.dataset.status = rawStatus;
+
+          // Wire change handler once
+          if (!statusSelect.dataset.wired) {
+            statusSelect.dataset.wired = 'true';
+            statusSelect.addEventListener('change', () => {
+              const chosen = statusSelect.value;
+              // If the user picks back the original status, no change needed
+              stagedState.stagedStatus = (chosen !== currentTicketOriginalStatus) ? chosen : '';
+              statusSelect.dataset.status = chosen;
+              refreshButtons();
+              setBaselineStatus();
+            });
           }
         }
 
@@ -5009,7 +5046,14 @@
       updateAutoStages(quickReplyDirty);
 
       const commitBtn = backdrop.querySelector('#smax-triage-commit');
-      if (commitBtn) commitBtn.disabled = !anyStaged();
+      if (commitBtn) {
+        commitBtn.disabled = !anyStaged();
+        // Determine the effective status (user-selected or ticket's current)
+        const effectiveStatus = stagedState.stagedStatus || currentTicketOriginalStatus;
+        const isSuspended = effectiveStatus === 'RequestStatusSuspended';
+        commitBtn.textContent = isSuspended ? 'ENVIAR SUSPENSO' : 'ENVIAR';
+        commitBtn.dataset.suspended = isSuspended ? 'true' : 'false';
+      }
     };
 
     const setBaselineStatus = () => {
@@ -5028,6 +5072,7 @@
       if (stagedState.assign) stagedBits.push('atribuir');
       if (stagedState.parentSelected && stagedState.parentId) stagedBits.push('global');
       if (stagedState.assignmentGroupSelected) stagedBits.push('GSE');
+      if (stagedState.stagedStatus) stagedBits.push('status');
       if (hasUnsavedSolution()) stagedBits.push('resposta');
       const pending = stagedBits.length ? ` Pendências: ${stagedBits.join(', ')}.` : '';
       statusEl.textContent = `${position} de ${total}.${pending}`;
@@ -5066,9 +5111,12 @@
       if (stagedState.assignmentGroupSelected && stagedState.assignmentGroupId) {
         props.ExpertGroup = stagedState.assignmentGroupId;
       }
+      if (stagedState.stagedStatus) {
+        props.Status = stagedState.stagedStatus;
+      }
 
       const doGlobal = stagedState.parentSelected && stagedState.parentId;
-      if (!stagedState.urgency && !props.ExpertAssignee && !doGlobal && !props.Solution && !props.ExpertGroup) {
+      if (!stagedState.urgency && !props.ExpertAssignee && !doGlobal && !props.Solution && !props.ExpertGroup && !props.Status) {
         setStatus('Nada para gravar.', 2500);
         return;
       }
@@ -5081,7 +5129,7 @@
 
       setStatus('Gravando alterações...');
       const tasks = [];
-      if (stagedState.urgency || props.ExpertAssignee || props.Solution || props.ExpertGroup) tasks.push(Api.postUpdateRequest(props));
+      if (stagedState.urgency || props.ExpertAssignee || props.Solution || props.ExpertGroup || props.Status) tasks.push(Api.postUpdateRequest(props));
       if (doGlobal) {
         // When linking to a Global, assign the ticket to the owner chosen in the HUD (dono dos finais)
         const ownerId = stagedState.assignPersonId;
@@ -5322,7 +5370,7 @@
                   </div>
                 </div>
                 <div id="smax-triage-location-display" data-empty="true" title="Local de divulgação">Sem local</div>
-                <span id="smax-triage-status-badge" data-empty="true" data-status="" title="">—</span>
+                <select id="smax-triage-status-select" class="smax-triage-select smax-triage-status-dropdown" disabled></select>
               </div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <span class="smax-triage-header-nav">
