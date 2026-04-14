@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TRIAGEM - SMAX SGS221
 // @namespace    https://github.com/DanielMacCruz/SGS221-Triagem
-// @version      1.0
+// @version      1.01
 // @description  Interface enhancements for triagem workflow
 // @author       YOU
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
@@ -10,8 +10,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        unsafeWindow
-// @downloadURL  https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/master/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
-// @updateURL    https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/master/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
+// @downloadURL  https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/master/SMAX/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
+// @updateURL    https://github.com/DanielMacCruz/SGS221-Triagem/raw/refs/heads/master/SMAX/TRIAGEM%20-%20SMAX%20SGS221-0.1.user.js
 // @homepageURL  https://github.com/DanielMacCruz/SGS221-Triagem
 // @supportURL   https://chatgpt.com
 // ==/UserScript==
@@ -320,10 +320,9 @@
     .smax-global-input[data-state="pending"] { border-color:#facc15; background:#422006; color:#fde68a; box-shadow:0 0 12px rgba(250,204,21,0.25); }
     .smax-global-hint { font-size:11px; color:#94a3b8; min-height:14px; }
     .smax-global-hint[data-state="staged"] { color:#4ade80; }
-    #smax-triage-worker-select[data-staged="true"] { border-color:#22c55e !important; box-shadow:0 0 12px rgba(34,197,94,0.4) !important; background:#052e16 !important; color:#bbf7d0 !important; }
-    #smax-triage-worker-select[data-staged="false"] { border-color:#facc15 !important; box-shadow:0 0 8px rgba(250,204,21,0.25) !important; }
-    .smax-triage-status-dropdown { font-size:11px; font-weight:600; min-width:110px; max-width:180px; padding:3px 24px 3px 8px !important; border-radius:6px; background-color:rgba(0,0,0,0.35); color:#e2e8f0; border:1px solid rgba(255,255,255,.15); cursor:pointer; transition:background .2s ease, color .2s ease, border-color .2s ease; }
-    .smax-triage-status-dropdown:disabled { opacity:0.5; cursor:not-allowed; }
+    .smax-custom-dropdown-display[data-staged="true"] { border-color:#22c55e !important; box-shadow:0 0 12px rgba(34,197,94,0.4) !important; background:#052e16 !important; color:#bbf7d0 !important; }
+    .smax-custom-dropdown-display[data-staged="false"] { border-color:#facc15 !important; box-shadow:0 0 8px rgba(250,204,21,0.25) !important; }
+    .smax-triage-status-dropdown { font-weight:600; min-width:110px; max-width:180px; }
     .smax-triage-status-dropdown[data-status="RequestStatusSuspended"] { background-color:rgba(250,204,21,0.25) !important; color:#fde68a !important; border-color:rgba(250,204,21,0.5) !important; }
     .smax-triage-status-dropdown[data-status="RequestStatusActive"],
     .smax-triage-status-dropdown[data-status="RequestStatusInProgress"] { background-color:rgba(34,197,94,0.2) !important; color:#bbf7d0 !important; border-color:rgba(34,197,94,0.4) !important; }
@@ -402,23 +401,18 @@
     .smax-log-btn-danger { background:#dc2626; border-color:#dc2626; color:#fff; }
     .smax-log-btn-danger:hover { background:#b91c1c; border-color:#b91c1c; }
     
-    .smax-triage-select {
-        background: #1e293b;
-        color: #f8fafc;
-        border: 1px solid #475569;
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 12px;
-        cursor: pointer;
-        transition: border-color .15s ease, box-shadow .15s ease;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 8px center;
-        padding-right: 28px;
-    }
-    .smax-triage-select:disabled { opacity: 0.5; cursor: not-allowed; }
-    .smax-triage-select:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 8px rgba(56,189,248,.35); }
+    .smax-custom-dropdown-wrapper { position:relative; min-width:140px; display:inline-flex; flex-direction:column; gap:4px; font-family:"Segoe UI",sans-serif; }
+    .smax-custom-dropdown-display { width:100%; border-radius:10px; border:1px solid #1f2937; background:#0f172a; color:#f8fafc; font-size:12px; min-height:32px; padding:6px 12px; text-align:left; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease, color .15s ease; outline:none; }
+    .smax-custom-dropdown-display:disabled { opacity:0.6; cursor:not-allowed; }
+    .smax-custom-chevron { font-size:11px; color:#94a3b8; transition:transform .15s ease; pointer-events:none; }
+    .smax-custom-dropdown-wrapper[data-open="true"] .smax-custom-chevron { transform:rotate(180deg); }
+    .smax-custom-dropdown-menu { position:absolute; bottom:calc(100% + 6px); left:0; min-width:100%; white-space:nowrap; background:#020617; border:1px solid #1f2937; border-radius:12px; box-shadow:0 18px 45px rgba(0,0,0,.55); padding:8px; display:none; flex-direction:column; z-index:10000; }
+    .smax-custom-dropdown-wrapper[data-open="true"] .smax-custom-dropdown-menu { display:flex; }
+    #smax-triage-status-wrapper .smax-custom-dropdown-menu { bottom:auto; top:calc(100% + 6px); }
+    .smax-custom-dropdown-options { max-height:240px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+    .smax-custom-dropdown-item { border-radius:8px; border:1px solid transparent; background:rgba(15,23,42,0.85); color:#e2e8f0; font-size:12px; padding:7px 10px; text-align:left; cursor:pointer; transition:all .12s ease; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .smax-custom-dropdown-item:hover { border-color:#38bdf8; background:#0f172a; color:#f8fafc; }
+    .smax-custom-dropdown-item[data-selected="true"] { border-color:#22c55e; background:#052e16; color:#bbf7d0; }
 
     /* ── Settings panel · eye-comfort overrides ─────────────────
        Optimised for cold-tone high-DPI Dell institutional monitors.
@@ -1443,6 +1437,33 @@
 
     const upsertTriageEntryFromProps = (props, rel) => {
       if (!props) return;
+
+      if (rel && typeof rel === 'object') {
+        Object.values(rel).forEach((val) => {
+          if (val && typeof val === 'object' && val.Id && val.Name) {
+            const pid = String(val.Id);
+            if (!DataRepository.peopleCache.has(pid)) {
+              let firstName = val.Name;
+              let lastName = '';
+              const parts = val.Name.split(' ');
+              if (parts.length > 1) {
+                firstName = parts[0];
+                lastName = parts.slice(1).join(' ');
+              }
+              DataRepository.peopleCache.set(pid, {
+                id: pid,
+                name: val.Name,
+                upn: val.Upn || '',
+                firstName,
+                lastName,
+                fullName: val.Name,
+                IsVIP: !!val.IsVIP
+              });
+            }
+          }
+        });
+      }
+
       const id = props.Id != null ? String(props.Id) : '';
       if (!id) return;
 
@@ -4591,17 +4612,22 @@
     };
 
     const DISCUSSION_DATE_OPTIONS = {
-      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
     };
     const resolveSubmitterName = (entry) => {
       if (!entry) return '';
-      if (entry.submitterDisplay) return entry.submitterDisplay;
       if (entry.submitterPersonId && DataRepository.peopleCache.has(entry.submitterPersonId)) {
         const person = DataRepository.peopleCache.get(entry.submitterPersonId);
         if (person && person.name) return person.name;
       }
-      return '';
+      if (entry.submitterDisplay) {
+        const lower = entry.submitterDisplay.toLowerCase();
+        if (lower !== 'agent' && lower !== 'user' && lower !== 'system') {
+          return entry.submitterDisplay;
+        }
+      }
+      return entry.submitterDisplay || '';
     };
 
     const buildDiscussionListMarkup = (entries) => {
@@ -4615,11 +4641,10 @@
         const bodyHtml = entry.bodyHtml || '<div style="color:#94a3b8;">(Sem conteúdo)</div>';
         const timestamp = Utils.formatBrDate(entry.createdTs, entry.createdRaw, DISCUSSION_DATE_OPTIONS, 'Data desconhecida');
         const name = resolveSubmitterName(entry);
+        const authorName = name ? String(name) : (entry.submitterDisplay ? String(entry.submitterDisplay) : 'Registro manual');
         const author = entry.systemGenerated
-          ? 'Gerado automaticamente'
-          : (name
-            ? `Registrado por ${Utils.escapeHtml(name)}`
-            : (entry.submitterDisplay ? `Registrado por ${Utils.escapeHtml(entry.submitterDisplay)}` : 'Registro manual'));
+          ? 'GERADO AUTOMATICAMENTE'
+          : Utils.escapeHtml(authorName).toUpperCase();
         return `
           <article class="smax-discussion-card" data-privacy="${privacy}">
             <div class="smax-discussion-heading">
@@ -4635,48 +4660,75 @@
 
     const populateTeamsDropdown = (selectedTeamId = '') => {
       if (!backdrop) return;
-      const select = backdrop.querySelector('#smax-triage-team-select');
-      if (!select) return;
+      const display = backdrop.querySelector('#smax-triage-team-display');
+      const label = backdrop.querySelector('#smax-triage-team-label');
+      const optionsEl = backdrop.querySelector('#smax-triage-team-options');
+      const wrapper = backdrop.querySelector('#smax-triage-team-wrapper');
+      if (!optionsEl) return;
 
       const teams = TeamsConfig.getTeams();
       let html = '';
+      let selName = '(Sem nome)';
       teams.forEach(t => {
         const isSel = String(t.id) === String(selectedTeamId);
         const displayName = t.name || t.id || '(Sem nome)';
-        html += `<option value="${Utils.escapeHtml(t.id)}" ${isSel ? 'selected' : ''}>${Utils.escapeHtml(displayName)}</option>`;
+        if (isSel) selName = displayName;
+        html += `<div class="smax-custom-dropdown-item" data-value="${Utils.escapeHtml(t.id)}" data-label="${Utils.escapeHtml(displayName)}" data-selected="${isSel ? 'true' : 'false'}">${Utils.escapeHtml(displayName)}</div>`;
       });
-      select.innerHTML = html;
-      select.disabled = false;
-      stagedState.selectedTeamId = select.value;
+      optionsEl.innerHTML = html;
+      display.disabled = false;
+      if (label) label.textContent = selName;
+      if (wrapper) wrapper.dataset.value = selectedTeamId;
+      stagedState.selectedTeamId = selectedTeamId;
     };
 
     const populateWorkerDropdown = (teamId, selectedWorkerName = '') => {
       if (!backdrop) return;
-      const select = backdrop.querySelector('#smax-triage-worker-select');
-      if (!select) return;
+      const display = backdrop.querySelector('#smax-triage-worker-display');
+      const label = backdrop.querySelector('#smax-triage-worker-label');
+      const optionsEl = backdrop.querySelector('#smax-triage-worker-options');
+      const wrapper = backdrop.querySelector('#smax-triage-worker-wrapper');
+      if (!optionsEl) return;
 
       const workers = TeamsConfig.getWorkersForTeam(teamId);
       if (!workers || !workers.length) {
-        select.innerHTML = '<option value="">(Sem atendentes)</option>';
-        select.disabled = true;
+        optionsEl.innerHTML = '<div class="smax-custom-dropdown-item" data-value="">(Sem atendentes)</div>';
+        display.disabled = true;
+        if (label) label.textContent = '(Sem atendentes)';
         stagedState.selectedWorkerId = '';
+        if (wrapper) wrapper.dataset.value = '';
         return;
       }
 
       let html = '';
+      let selName = selectedWorkerName || '(Sem atribuição)';
+      html += `<div class="smax-custom-dropdown-item" data-value="" data-label="(Sem atribuição)" data-selected="${!selectedWorkerName ? 'true' : 'false'}">(Sem atribuição)</div>`;
       workers.forEach(w => {
         const isSel = w.name === selectedWorkerName;
-        const rangeLabel = w.ranges ? ` (${w.ranges})` : '';
-        html += `<option value="${Utils.escapeHtml(w.name)}" ${isSel ? 'selected' : ''}>${Utils.escapeHtml(w.name)}${rangeLabel}</option>`;
+        if (isSel) selName = w.name;
+        const rangeLabel = w.ranges ? ` <span style="color:#94a3b8;font-size:10px;">(${Utils.escapeHtml(w.ranges)})</span>` : '';
+        html += `<div class="smax-custom-dropdown-item" data-value="${Utils.escapeHtml(w.name)}" data-label="${Utils.escapeHtml(w.name)}" data-selected="${isSel ? 'true' : 'false'}">
+                   <span>${Utils.escapeHtml(w.name)}</span>${rangeLabel}
+                 </div>`;
       });
-      select.innerHTML = html;
-      select.disabled = false;
-      stagedState.selectedWorkerId = select.value;
+      optionsEl.innerHTML = html;
+      display.disabled = false;
+      if (label) label.textContent = selName;
+      if (wrapper) wrapper.dataset.value = selectedWorkerName;
+      stagedState.selectedWorkerId = selectedWorkerName;
     };
 
-    const render = () => {
+    const render = (force = false) => {
       if (!backdrop) return;
       closeGseDropdown();
+
+      const item = currentItem();
+      const nextId = item ? item.idText : null;
+      if (!force && activeTicketId && activeTicketId === nextId) {
+        setBaselineStatus();
+        return;
+      }
+
       const ticketDetailsEl = backdrop.querySelector('#smax-triage-ticket-details');
       const discussionsEl = backdrop.querySelector('#smax-triage-discussions');
       const statusEl = backdrop.querySelector('#smax-triage-status');
@@ -4715,10 +4767,12 @@
         if (assignPanel) {
           assignPanel.dataset.state = 'disabled';
           // Clear dropdowns
-          const tSelect = backdrop.querySelector('#smax-triage-team-select');
-          const wSelect = backdrop.querySelector('#smax-triage-worker-select');
-          if (tSelect) { tSelect.innerHTML = ''; tSelect.disabled = true; }
-          if (wSelect) { wSelect.innerHTML = ''; wSelect.disabled = true; }
+          const tSelect = backdrop.querySelector('#smax-triage-team-options');
+          const tDisplay = backdrop.querySelector('#smax-triage-team-display');
+          const wSelect = backdrop.querySelector('#smax-triage-worker-options');
+          const wDisplay = backdrop.querySelector('#smax-triage-worker-display');
+          if (tSelect) { tSelect.innerHTML = ''; tDisplay.disabled = true; backdrop.querySelector('#smax-triage-team-label').textContent = 'Equipe...'; }
+          if (wSelect) { wSelect.innerHTML = ''; wDisplay.disabled = true; backdrop.querySelector('#smax-triage-worker-label').textContent = 'Atendente...'; }
         }
         if (inputGlobal) inputGlobal.value = '';
         if (inputGlobal) inputGlobal.dataset.state = 'inactive';
@@ -4730,15 +4784,15 @@
         activeTicketId = null;
         clearQuickReplyState();
         updateAttachmentPanel({ state: 'empty', items: [] });
-        const statusSelect = backdrop.querySelector('#smax-triage-status-select');
-        if (statusSelect) { statusSelect.innerHTML = ''; statusSelect.disabled = true; statusSelect.dataset.status = ''; }
+        const statusOptions = backdrop.querySelector('#smax-triage-status-options');
+        const statusDisplay = backdrop.querySelector('#smax-triage-status-display');
+        if (statusOptions) { statusOptions.innerHTML = ''; statusDisplay.disabled = true; statusDisplay.dataset.status = ''; backdrop.querySelector('#smax-triage-status-label').textContent = 'Carregando...'; }
         return;
       }
 
       if (nextBtn) nextBtn.disabled = false;
       if (prevBtn) prevBtn.disabled = false;
-      const item = currentItem();
-      activeTicketId = item ? item.idText : null;
+      activeTicketId = nextId;
       const pendingRequestId = activeTicketId;
       resetStaged();
       currentAssignmentGroupId = '';
@@ -4857,39 +4911,33 @@
         }
 
         // Update status dropdown in header
-        const statusSelect = backdrop.querySelector('#smax-triage-status-select');
-        if (statusSelect) {
+        const statusWrapper = backdrop.querySelector('#smax-triage-status-wrapper');
+        const statusDisplay = backdrop.querySelector('#smax-triage-status-display');
+        const statusLabel = backdrop.querySelector('#smax-triage-status-label');
+        const statusOptions = backdrop.querySelector('#smax-triage-status-options');
+        if (statusOptions) {
           const rawStatus = full.status || '';
           currentTicketOriginalStatus = rawStatus;
           stagedState.stagedStatus = ''; // reset on ticket change
 
-          // Build options: original status (if not in editable list) + editable statuses
           let optionsHtml = '';
           const editableSet = new Set(EDITABLE_STATUSES);
+          let selLabel = humanReadableStatus(rawStatus) + (editableSet.has(rawStatus) ? '' : ' (atual)');
+
           if (rawStatus && !editableSet.has(rawStatus)) {
-            // The ticket has a status not in our editable list — show it as "current" option
-            optionsHtml += `<option value="${Utils.escapeHtml(rawStatus)}" selected>${Utils.escapeHtml(humanReadableStatus(rawStatus))} (atual)</option>`;
+            optionsHtml += `<div class="smax-custom-dropdown-item" data-value="${Utils.escapeHtml(rawStatus)}" data-label="${Utils.escapeHtml(selLabel)}" data-selected="true">${Utils.escapeHtml(selLabel)}</div>`;
           }
           EDITABLE_STATUSES.forEach(key => {
             const isCurrent = key === rawStatus;
-            optionsHtml += `<option value="${Utils.escapeHtml(key)}" ${isCurrent ? 'selected' : ''}>${Utils.escapeHtml(humanReadableStatus(key))}</option>`;
+            const hr = humanReadableStatus(key);
+            optionsHtml += `<div class="smax-custom-dropdown-item" data-value="${Utils.escapeHtml(key)}" data-label="${Utils.escapeHtml(hr)}" data-selected="${isCurrent ? 'true' : 'false'}">${Utils.escapeHtml(hr)}</div>`;
+            if (isCurrent) selLabel = hr;
           });
-          statusSelect.innerHTML = optionsHtml;
-          statusSelect.disabled = false;
-          statusSelect.dataset.status = rawStatus;
-
-          // Wire change handler once
-          if (!statusSelect.dataset.wired) {
-            statusSelect.dataset.wired = 'true';
-            statusSelect.addEventListener('change', () => {
-              const chosen = statusSelect.value;
-              // If the user picks back the original status, no change needed
-              stagedState.stagedStatus = (chosen !== currentTicketOriginalStatus) ? chosen : '';
-              statusSelect.dataset.status = chosen;
-              refreshButtons();
-              setBaselineStatus();
-            });
-          }
+          statusOptions.innerHTML = optionsHtml;
+          statusDisplay.disabled = false;
+          statusDisplay.dataset.status = rawStatus;
+          if (statusLabel) statusLabel.textContent = selLabel;
+          if (statusWrapper) statusWrapper.dataset.value = rawStatus;
         }
 
         // Sync assignment source-of-truth
@@ -4921,35 +4969,7 @@
         });
       }
 
-      const teamSelect = backdrop.querySelector('#smax-triage-team-select');
-      if (teamSelect && !teamSelect.dataset.wired) {
-        teamSelect.dataset.wired = '1';
-        teamSelect.addEventListener('change', () => {
-          stagedState.selectedTeamId = teamSelect.value;
-
-          // Re-run suggestion for the NEW team
-          const item = currentItem();
-          const newTeam = TeamsConfig.getTeamById(stagedState.selectedTeamId);
-          const suggestedInfo = TeamsConfig.suggestWorker(newTeam, item ? (item.idText || item.idNum) : '');
-          const newWorkerName = suggestedInfo ? suggestedInfo.name : '';
-
-          populateWorkerDropdown(stagedState.selectedTeamId, newWorkerName);
-          currentOwnerName = newWorkerName;
-          stagedState.selectedWorkerId = newWorkerName; // Ensure state tracks it immediately
-
-          refreshButtons();
-        });
-      }
-
-      const workerSelect = backdrop.querySelector('#smax-triage-worker-select');
-      if (workerSelect && !workerSelect.dataset.wired) {
-        workerSelect.dataset.wired = '1';
-        workerSelect.addEventListener('change', () => {
-          stagedState.selectedWorkerId = workerSelect.value;
-          currentOwnerName = workerSelect.value; // Manual override
-          refreshButtons();
-        });
-      }
+      // Native change listeners removed, event logic delegated to backdrop click
 
       refreshButtons();
       setBaselineStatus();
@@ -4989,9 +5009,9 @@
       stagedState.assign = readyForOwner;
 
       // Update worker select staging visual
-      const workerSelect = backdrop.querySelector('#smax-triage-worker-select');
-      if (workerSelect) {
-        workerSelect.dataset.staged = readyForOwner ? 'true' : (hasOwner ? 'false' : '');
+      const workerDisplay = backdrop.querySelector('#smax-triage-worker-display');
+      if (workerDisplay) {
+        workerDisplay.dataset.staged = readyForOwner ? 'true' : (hasOwner ? 'false' : '');
       }
 
       if (assignPanel && assignValue) {
@@ -5050,9 +5070,9 @@
         commitBtn.disabled = !anyStaged();
         // Determine the effective status (user-selected or ticket's current)
         const effectiveStatus = stagedState.stagedStatus || currentTicketOriginalStatus;
-        const isSuspended = effectiveStatus === 'RequestStatusSuspended';
-        commitBtn.textContent = isSuspended ? 'ENVIAR SUSPENSO' : 'ENVIAR';
-        commitBtn.dataset.suspended = isSuspended ? 'true' : 'false';
+        const isNormalEnvio = effectiveStatus === 'RequestStatusInProgress' || effectiveStatus === 'RequestStatusReady';
+        commitBtn.textContent = isNormalEnvio ? 'ENVIAR' : 'ENVIAR (Checar status)';
+        commitBtn.dataset.suspended = isNormalEnvio ? 'false' : 'true';
       }
     };
 
@@ -5309,6 +5329,21 @@
     const advanceQueue = () => navigateQueue(1);
     const retreatQueue = () => navigateQueue(-1);
 
+    const updateStartBtnText = () => {
+      if (!startBtn) return;
+      if (activeTicketId) {
+        startBtn.textContent = 'Restaurar triagem';
+        startBtn.style.background = '#0ea5e9';
+        startBtn.style.border = '1px solid #38bdf8';
+        startBtn.style.boxShadow = '0 0 12px rgba(14,165,233,.5)';
+      } else {
+        startBtn.textContent = 'Iniciar triagem';
+        startBtn.style.background = '';
+        startBtn.style.border = '';
+        startBtn.style.boxShadow = '';
+      }
+    };
+
     const openHud = () => {
       DataRepository.ensurePeopleLoaded();
       ensureSupportGroupsReady();
@@ -5319,13 +5354,19 @@
       syncQueueFromApi({ force: true, announce: true }).catch(() => { });
       const { list, selectedId } = buildQueue();
       triageQueue = list;
-      if (!triageQueue.length) triageIndex = -1;
-      else if (selectedId) {
+
+      if (!triageQueue.length) {
+        triageIndex = -1;
+      } else if (activeTicketId) {
+        const focusIdx = triageQueue.findIndex((entry) => entry.idText === activeTicketId);
+        triageIndex = focusIdx >= 0 ? focusIdx : 0;
+      } else if (selectedId) {
         const focusIdx = triageQueue.findIndex((entry) => entry.idText === selectedId);
         triageIndex = focusIdx >= 0 ? focusIdx : 0;
       } else {
         triageIndex = 0;
       }
+
       render();
       const realFlag = backdrop.querySelector('#smax-triage-real-flag');
       if (realFlag) realFlag.style.display = prefs.enableRealWrites ? 'block' : 'none';
@@ -5333,7 +5374,10 @@
 
     const closeHud = () => {
       backdrop.style.display = 'none';
-      if (startBtn) startBtn.style.display = 'block';
+      if (startBtn) {
+        startBtn.style.display = 'block';
+        updateStartBtnText();
+      }
       closeGseDropdown();
     };
 
@@ -5370,7 +5414,15 @@
                   </div>
                 </div>
                 <div id="smax-triage-location-display" data-empty="true" title="Local de divulgação">Sem local</div>
-                <select id="smax-triage-status-select" class="smax-triage-select smax-triage-status-dropdown" disabled></select>
+                <div id="smax-triage-status-wrapper" class="smax-custom-dropdown-wrapper" data-open="false">
+                  <button type="button" id="smax-triage-status-display" class="smax-custom-dropdown-display smax-triage-status-dropdown" disabled>
+                    <span id="smax-triage-status-label">Carregando...</span>
+                    <span class="smax-custom-chevron">▾</span>
+                  </button>
+                  <div class="smax-custom-dropdown-menu">
+                    <div class="smax-custom-dropdown-options" id="smax-triage-status-options"></div>
+                  </div>
+                </div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <span class="smax-triage-header-nav">
@@ -5395,8 +5447,24 @@
                   <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;">
-                  <select id="smax-triage-team-select" class="smax-triage-select" style="min-width:100px;" disabled></select>
-                  <select id="smax-triage-worker-select" class="smax-triage-select" style="min-width:140px;" disabled></select>
+                  <div id="smax-triage-team-wrapper" class="smax-custom-dropdown-wrapper" data-open="false" style="min-width:100px;">
+                    <button type="button" id="smax-triage-team-display" class="smax-custom-dropdown-display" disabled>
+                      <span id="smax-triage-team-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Equipe...</span>
+                      <span class="smax-custom-chevron">▾</span>
+                    </button>
+                    <div class="smax-custom-dropdown-menu">
+                      <div class="smax-custom-dropdown-options" id="smax-triage-team-options"></div>
+                    </div>
+                  </div>
+                  <div id="smax-triage-worker-wrapper" class="smax-custom-dropdown-wrapper" data-open="false" style="min-width:140px;">
+                    <button type="button" id="smax-triage-worker-display" class="smax-custom-dropdown-display" disabled>
+                      <span id="smax-triage-worker-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Atendente...</span>
+                      <span class="smax-custom-chevron">▾</span>
+                    </button>
+                    <div class="smax-custom-dropdown-menu">
+                      <div class="smax-custom-dropdown-options" id="smax-triage-worker-options"></div>
+                    </div>
+                  </div>
                 </div>
                 <input type="text" class="smax-global-input" id="smax-triage-global-id" placeholder="Global ID" inputmode="numeric" autocomplete="off" style="width:100px;" />
                 <div style="display:none;" id="smax-triage-real-flag"></div>
@@ -5422,7 +5490,56 @@
       startBtn.addEventListener('click', openHud);
       backdrop.querySelector('#smax-triage-close').addEventListener('click', closeHud);
       backdrop.addEventListener('click', (event) => {
-        if (event.target === backdrop) closeHud();
+        if (event.target === backdrop) {
+          closeHud();
+          return;
+        }
+
+        const display = event.target.closest('.smax-custom-dropdown-display');
+        if (display && !display.disabled) {
+          const wrapper = display.closest('.smax-custom-dropdown-wrapper');
+          const isOpen = wrapper.dataset.open === 'true';
+          document.querySelectorAll('.smax-custom-dropdown-wrapper, #smax-triage-gse-wrapper').forEach(w => w.dataset.open = 'false');
+          if (!isOpen) wrapper.dataset.open = 'true';
+          return;
+        }
+
+        const item = event.target.closest('.smax-custom-dropdown-item');
+        if (item) {
+          const wrapper = item.closest('.smax-custom-dropdown-wrapper');
+          wrapper.dataset.open = 'false';
+          if (wrapper.id === 'smax-triage-team-wrapper') {
+            stagedState.selectedTeamId = item.dataset.value;
+            const tick = currentItem();
+            const newTeam = TeamsConfig.getTeamById(stagedState.selectedTeamId);
+            const suggInfo = TeamsConfig.suggestWorker(newTeam, tick ? (tick.idText || tick.idNum) : '');
+            const newWorkerName = suggInfo ? suggInfo.name : '';
+            populateWorkerDropdown(stagedState.selectedTeamId, newWorkerName);
+            currentOwnerName = newWorkerName;
+            stagedState.selectedWorkerId = newWorkerName;
+            refreshButtons();
+            setBaselineStatus();
+          } else if (wrapper.id === 'smax-triage-worker-wrapper') {
+            stagedState.selectedWorkerId = item.dataset.value;
+            currentOwnerName = item.dataset.value;
+            refreshButtons();
+            setBaselineStatus();
+          } else if (wrapper.id === 'smax-triage-status-wrapper') {
+            const val = item.dataset.value;
+            stagedState.stagedStatus = (val !== currentTicketOriginalStatus) ? val : '';
+            wrapper.querySelector('.smax-custom-dropdown-display').dataset.status = val;
+            wrapper.querySelector('#smax-triage-status-label').textContent = item.dataset.label;
+            wrapper.querySelectorAll('.smax-custom-dropdown-item').forEach(opt => opt.dataset.selected = opt === item ? 'true' : 'false');
+            refreshButtons();
+            setBaselineStatus();
+          }
+          return;
+        }
+
+        if (!event.target.closest('.smax-custom-dropdown-wrapper') && !event.target.closest('#smax-triage-gse-wrapper')) {
+          document.querySelectorAll('.smax-custom-dropdown-wrapper, #smax-triage-gse-wrapper').forEach(w => w.dataset.open = 'false');
+          if (typeof closeGseDropdown === 'function') closeGseDropdown();
+        }
       });
       const prevBtn = backdrop.querySelector('#smax-triage-prev');
       if (prevBtn) prevBtn.addEventListener('click', () => retreatQueue());
