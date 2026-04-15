@@ -4702,7 +4702,6 @@
 
       let html = '';
       let selName = selectedWorkerName || '(Sem atribuição)';
-      html += `<div class="smax-custom-dropdown-item" data-value="" data-label="(Sem atribuição)" data-selected="${!selectedWorkerName ? 'true' : 'false'}">(Sem atribuição)</div>`;
       workers.forEach(w => {
         const isSel = w.name === selectedWorkerName;
         if (isSel) selName = w.name;
