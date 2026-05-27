@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TRIAGEM - SMAX SGS221
 // @namespace    https://github.com/DanielMacCruz/SGS221-Triagem
-// @version      1.03
+// @version      1.04
 // @description  Interface enhancements for triagem workflow
 // @author       YOU
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
@@ -1651,6 +1651,17 @@
         firstName: 'ROBSON',
         lastName: 'SOUZA ALVES',
         location: '49893064'
+      },
+      {
+        id: '23679550',
+        name: 'CAMILA DOS SANTOS SOUSA',
+        upn: 'camsousa',
+        email: 'camsousa@tjsp.jus.br',
+        isVip: false,
+        employeeNumber: '377292',
+        firstName: 'CAMILA',
+        lastName: 'DOS SANTOS SOUSA',
+        location: ''
       },
       {
         id: '46805201',
@@ -3724,6 +3735,24 @@
       wireBottomPanelEvents();
     };
 
+    const safeBtoa = (str) => {
+      try {
+        return btoa(unescape(encodeURIComponent(str || '')));
+      } catch (err) {
+        console.error('[SMAX] Base64 encode error:', err);
+        return '';
+      }
+    };
+
+    const safeAtob = (str) => {
+      try {
+        return decodeURIComponent(escape(atob(str || '')));
+      } catch (err) {
+        console.error('[SMAX] Base64 decode error:', err);
+        return '';
+      }
+    };
+
     // Shareable config keys (no personal identity — meant for team distribution)
     const CONFIG_KEYS = [
       'nameBadgesOn', 'collapseOn', 'enlargeCommentsOn', 'flagSkullOn',
@@ -3738,6 +3767,11 @@
         if (prefs[key] === undefined) return;
         if (key === 'teamsConfigRaw') {
           try { obj.teams = JSON.parse(prefs[key]); } catch { obj.teams = prefs[key]; }
+        } else if (key === 'quickAnswers' && Array.isArray(prefs[key])) {
+          obj[key] = prefs[key].map(item => ({
+            ...item,
+            html: safeBtoa(item.html)
+          }));
         } else {
           obj[key] = prefs[key];
         }
@@ -3764,7 +3798,21 @@
             : JSON.stringify(parsed.teams);
           count++;
         } else if (parsed[key] !== undefined) {
-          prefs[key] = parsed[key];
+          if (key === 'quickAnswers' && Array.isArray(parsed[key])) {
+            prefs[key] = parsed[key].map(item => {
+              let decoded = item.html;
+              if (item.html && !item.html.includes('<')) {
+                const dec = safeAtob(item.html);
+                if (dec) decoded = dec;
+              }
+              return {
+                ...item,
+                html: decoded
+              };
+            });
+          } else {
+            prefs[key] = parsed[key];
+          }
           count++;
         }
       });
