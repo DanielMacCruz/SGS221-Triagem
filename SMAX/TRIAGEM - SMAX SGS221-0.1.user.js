@@ -1651,6 +1651,17 @@
         firstName: 'ROBSON',
         lastName: 'SOUZA ALVES',
         location: '49893064'
+      },
+      {
+        id: '46805201',
+        name: 'JUNIA AUXILIADORA ALVES PEDROSA',
+        upn: 'jupedrosa',
+        email: 'jupedrosa@tjsp.jus.br',
+        isVip: false,
+        employeeNumber: '380125',
+        firstName: 'JUNIA',
+        lastName: 'AUXILIADORA ALVES PEDROSA',
+        location: ''
       }
     ];
     const supportGroupMap = new Map();
