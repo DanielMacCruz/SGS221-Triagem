@@ -1664,6 +1664,17 @@
         location: ''
       },
       {
+        id: '61244734',
+        name: 'RONEY RODRIGO RIBEIRO DOS SANTOS',
+        upn: 'ronsantos',
+        email: 'ronsantos@tjsp.jus.br',
+        isVip: false,
+        employeeNumber: '381730',
+        firstName: 'RONEY',
+        lastName: 'RIBEIRO DOS SANTOS',
+        location: ''
+      },
+      {
         id: '46805201',
         name: 'JUNIA AUXILIADORA ALVES PEDROSA',
         upn: 'jupedrosa',
