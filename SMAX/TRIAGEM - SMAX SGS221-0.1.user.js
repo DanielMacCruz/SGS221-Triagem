@@ -153,7 +153,7 @@
         answered: !!data.answered,
         usedScript: !!data.usedScript,
         relevantWork: '',
-        user: data.user || prefs.myPersonName || '',
+        user: data.user || 'Triador',
         success: data.success !== false
       };
       entry.relevantWork = deriveRelevantWork(entry);
@@ -271,16 +271,18 @@
     #smax-triage-start-btn:hover { transform:translateX(-50%) translateY(-2px); box-shadow:0 12px 32px rgba(59,130,246,.5),0 0 0 1px rgba(255,255,255,.15) inset; }
     #smax-triage-hud-backdrop { position:fixed; inset:0; padding:30px 0 20px; background:linear-gradient(180deg,rgba(0,0,0,0.7) 0%,rgba(0,0,0,0.5) 100%); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); z-index:999997; display:none; align-items:flex-start; justify-content:center; overflow:auto; }
     #smax-triage-hud-wrapper { position:relative; max-width:1340px; width:99vw; max-height:calc(100vh - 60px); display:flex; align-items:stretch; }
-    #smax-triage-hud { position:relative; background:#0f172a; color:#e5e7eb; border-radius:16px; padding:0; width:100%; box-shadow:0 25px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08) inset; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; gap:0; align-items:stretch; overflow:hidden; }
+    #smax-triage-hud { position:relative; background:#0f172a; color:#e5e7eb; border-radius:16px; padding:0; width:100%; box-shadow:0 25px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08) inset; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; flex-direction:column; gap:0; align-items:stretch; overflow:hidden; }
+    #smax-triage-hud-content { display:flex; flex-direction:row; gap:0; align-items:stretch; flex:1; min-height:0; overflow:hidden; }
     .smax-triage-header-nav { display:inline-flex; align-items:center; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:2px 4px; gap:2px; user-select:none; margin-right:8px; }
     .smax-triage-header-nav button { width:24px; height:24px; border-radius:50%; border:none; background:transparent; color:#e2e8f0; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.15s ease, color 0.15s ease, transform 0.1s ease; }
     .smax-triage-header-nav button:hover:not(:disabled) { background:rgba(255,255,255,0.15); color:#38bdf8; }
     .smax-triage-header-nav button:active:not(:disabled) { transform:scale(0.92); }
     .smax-triage-header-nav button:disabled { opacity:0.25; cursor:not-allowed; }
     #smax-triage-nav-counter { font-size:11px; font-weight:600; color:#f8fafc; padding:0 4px; min-width:38px; text-align:center; font-family:monospace; }
-    #smax-triage-hud-main { display:flex; flex-direction:column; gap:12px; flex:1; min-width:0; }
-    #smax-triage-hud-header { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 20px; background:linear-gradient(90deg,#0ea5e9 0%,#3b82f6 50%,#8b5cf6 100%); border-radius:16px 0 0 0; }
-    #smax-triage-location-display { font-size:11px; font-weight:400; color:#e2e8f0; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:default; background:rgba(0,0,0,0.35); border-radius:6px; padding:3px 8px; }
+    #smax-triage-hud-main { display:flex; flex-direction:column; gap:12px; flex:1; min-width:0; padding-top:12px; }
+    #smax-triage-hud-header { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:40px; padding:6px 16px; background:linear-gradient(90deg,#0ea5e9 0%,#3b82f6 50%,#8b5cf6 100%); border-radius:16px 16px 0 0; }
+    #smax-triage-title-display { font-size:11px; font-weight:600; color:#ffffff; max-width:350px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:default; background:rgba(0,0,0,0.35); border-radius:6px; padding:3px 8px; border:1px solid rgba(255,255,255,0.1); }
+    #smax-triage-location-display { font-size:11px; font-weight:400; color:#e2e8f0; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:default; background:rgba(0,0,0,0.35); border-radius:6px; padding:3px 8px; border:1px solid rgba(255,255,255,0.1); }
     #smax-triage-location-display[data-empty="true"] { color:#94a3b8; font-style:italic; }
     #smax-triage-hud-header .smax-triage-title-bar { display:flex; align-items:center; gap:12px; flex:1; }
     #smax-personal-finals-input { background:#0f172a; border:1px solid #1f2937; border-radius:999px; padding:2px 8px; color:#f8fafc; font-size:11px; min-width:60px; max-width:70px; }
@@ -1640,52 +1642,7 @@
     const triageCache = new Map();
     let triageIds = [];
     const peopleCache = new Map();
-    const manualPeopleSeed = [
-      {
-        id: '95970',
-        name: 'ROBSON SOUZA ALVES',
-        upn: 'robsonalves',
-        email: 'robsonalves@tjsp.jus.br',
-        isVip: false,
-        employeeNumber: '367442',
-        firstName: 'ROBSON',
-        lastName: 'SOUZA ALVES',
-        location: '49893064'
-      },
-      {
-        id: '23679550',
-        name: 'CAMILA DOS SANTOS SOUSA',
-        upn: 'camsousa',
-        email: 'camsousa@tjsp.jus.br',
-        isVip: false,
-        employeeNumber: '377292',
-        firstName: 'CAMILA',
-        lastName: 'DOS SANTOS SOUSA',
-        location: ''
-      },
-      {
-        id: '61244734',
-        name: 'RONEY RODRIGO RIBEIRO DOS SANTOS',
-        upn: 'ronsantos',
-        email: 'ronsantos@tjsp.jus.br',
-        isVip: false,
-        employeeNumber: '381730',
-        firstName: 'RONEY',
-        lastName: 'RIBEIRO DOS SANTOS',
-        location: ''
-      },
-      {
-        id: '46805201',
-        name: 'JUNIA AUXILIADORA ALVES PEDROSA',
-        upn: 'jupedrosa',
-        email: 'jupedrosa@tjsp.jus.br',
-        isVip: false,
-        employeeNumber: '380125',
-        firstName: 'JUNIA',
-        lastName: 'AUXILIADORA ALVES PEDROSA',
-        location: ''
-      }
-    ];
+    const manualPeopleSeed = [];
     const supportGroupMap = new Map();
     let supportGroupTotal = null;
     const supportGroupListeners = new Set();
@@ -1855,7 +1812,11 @@
       let submitterPersonId = '';
       if (submitter) {
         const match = submitter.match(/Person\/(\d+)/i);
-        if (match) submitterPersonId = match[1];
+        if (match) {
+          submitterPersonId = match[1];
+        } else if (/^\d+$/.test(submitter)) {
+          submitterPersonId = submitter;
+        }
       }
       const submitterDisplayCandidates = [raw.SubmitterDisplay, raw.CommentFrom, raw.CommentTo];
       let submitterDisplay = '';
@@ -1945,6 +1906,8 @@
 
       const id = props.Id != null ? String(props.Id) : '';
       if (!id) return;
+
+      const displayLabel = props.DisplayLabel ? String(props.DisplayLabel).trim() : '';
 
       const createdRaw = props.CreateTime;
       let createdText = '';
@@ -2076,7 +2039,8 @@
         processNumber,
         locationId,
         locationName,
-        status
+        status,
+        displayLabel: displayLabel || existing.displayLabel || ''
       }));
     };
 
@@ -2165,12 +2129,46 @@
             lastName: props.LastName || '',
             location: props.Location || ''
           };
-          if (!payload.email && !payload.upn) continue;
+          if (!payload.name && !payload.email && !payload.upn) continue;
           peopleCache.set(id, payload);
         }
         notifyPeopleListeners();
       } catch (err) {
         console.warn('[SMAX] Failed to ingest person payload:', err);
+      }
+    };
+
+    const parseBatchResponse = (responseText) => {
+      if (!responseText) return;
+      let index = 0;
+      while ((index = responseText.indexOf('{"entities":', index)) !== -1) {
+        const nextBoundary = responseText.indexOf('\n--', index);
+        let chunk = '';
+        if (nextBoundary !== -1) {
+          chunk = responseText.substring(index, nextBoundary).trim();
+        } else {
+          chunk = responseText.substring(index).trim();
+          const endBoundary = chunk.lastIndexOf('}');
+          if (endBoundary !== -1) {
+            chunk = chunk.substring(0, endBoundary + 1);
+          }
+        }
+        try {
+          const json = JSON.parse(chunk);
+          if (json && Array.isArray(json.entities)) {
+            const persons = json.entities.filter(e => e && e.entity_type === 'Person');
+            if (persons.length) {
+              ingestPersonListPayload({ entities: persons, meta: json.meta });
+            }
+            const requests = json.entities.filter(e => e && e.entity_type === 'Request');
+            if (requests.length) {
+              ingestRequestListPayload({ entities: requests, meta: json.meta });
+            }
+          }
+        } catch (err) {
+          console.warn('[SMAX] Failed to parse batch JSON chunk:', err);
+        }
+        index += 12;
       }
     };
 
@@ -2402,6 +2400,7 @@
       updateCachedSolution,
       ingestSupportGroupPayload,
       getSupportGroupsSnapshot,
+      parseBatchResponse,
       onQueueUpdate: (fn) => {
         if (typeof fn === 'function') queueListeners.add(fn);
       },
@@ -2475,12 +2474,18 @@
           try { this.__smaxUrl = url; } catch { }
           return origOpen.call(this, method, url, ...rest);
         };
+        const batchRegex = /\/rest\/\d+\/(ems\/(Request|Person|PersonGroup)|batch)/i;
+
         XMLHttpRequest.prototype.send = function patchedSend(body) {
           this.addEventListener('load', function onLoad() {
             try {
               const url = this.__smaxUrl || this.responseURL || '';
-              if (!/\/rest\/\d+\/ems\/(Request|Person|PersonGroup)/i.test(url)) return;
+              if (!batchRegex.test(url)) return;
               if (!this.responseText) return;
+              if (/\/rest\/\d+\/batch/i.test(url)) {
+                DataRepository.parseBatchResponse(this.responseText);
+                return;
+              }
               const json = JSON.parse(this.responseText);
               if (isRequestListUrl(url)) {
                 DataRepository.ingestRequestListPayload(json);
@@ -2501,12 +2506,16 @@
           window.fetch = function patchedFetch(input, init) {
             return origFetch(input, init).then((resp) => {
               try {
-                const url = resp.url || (typeof input === 'string' ? input : '');
-                if (!/\/rest\/\d+\/ems\/(Request|Person|PersonGroup)/i.test(url)) return resp;
+                const url = resp.url || (typeof input === 'string' ? input : (input && input.url ? input.url : '')) || '';
+                if (!batchRegex.test(url)) return resp;
                 const clone = resp.clone();
                 clone.text().then((txt) => {
                   try {
                     if (!txt) return;
+                    if (/\/rest\/\d+\/batch/i.test(url)) {
+                      DataRepository.parseBatchResponse(txt);
+                      return;
+                    }
                     const json = JSON.parse(txt);
                     if (isRequestListUrl(url)) {
                       DataRepository.ingestRequestListPayload(json);
@@ -3384,6 +3393,13 @@
           });
         });
 
+        // Digits Input Filter for existing rows
+        container.querySelectorAll('.smax-worker-digits').forEach(input => {
+          input.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^\d,\-]/g, '');
+          });
+        });
+
         const cancelBtn = container.querySelector('.smax-cancel-edit');
         if (cancelBtn) cancelBtn.addEventListener('click', () => { editingTeamId = null; renderPanel(); });
 
@@ -3420,8 +3436,37 @@
               if (name) newWorkers.push({ name, digits, isAbsent });
             }
           });
-          // Sort workers alphabetically by name for better UX
-          newWorkers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }));
+
+          // Check for duplicate/overlapping digits (collisions) among active team members
+          const digitToWorker = {};
+          const collisions = [];
+          newWorkers.forEach(w => {
+            if (w.isAbsent) return;
+            const ranges = Utils.parseDigitRanges(w.digits);
+            ranges.forEach(d => {
+              if (digitToWorker[d]) {
+                collisions.push(`Dígito "${d}" associado a ${digitToWorker[d]} e ${w.name}`);
+              } else {
+                digitToWorker[d] = w.name;
+              }
+            });
+          });
+
+          if (collisions.length > 0) {
+            if (!confirm(`Aviso: Colisão de finais detectada:\n\n${collisions.slice(0, 5).join('\n')}${collisions.length > 5 ? '\n... e outras.' : ''}\n\nDeseja salvar assim mesmo?`)) {
+              return;
+            }
+          }
+
+          // Sort workers ascending by their lowest digit range start
+          newWorkers.sort((a, b) => {
+            const aRanges = Utils.parseDigitRanges(a.digits);
+            const bRanges = Utils.parseDigitRanges(b.digits);
+            const aMin = aRanges.length ? aRanges[0] : 999;
+            const bMin = bRanges.length ? bRanges[0] : 999;
+            if (aMin !== bMin) return aMin - bMin;
+            return (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' });
+          });
 
           // Collect location matchers
           const newMatchers = [];
@@ -3575,7 +3620,7 @@
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = `
             <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;background:rgba(15,23,42,0.6);border:1px solid #475569;padding:8px;border-radius:8px;">
-              <input type="text" class="smax-worker-name" value="${Utils.escapeHtml(name)}" style="flex:1;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Nome do Responsável">
+              <input type="text" class="smax-worker-name" value="${name ? Utils.escapeHtml(name) : ''}" style="flex:1;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Nome do Responsável">
               <input type="text" class="smax-worker-digits" value="" style="width:80px;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Digitos (ex: 0-9)">
               <div class="smax-worker-absent-wrapper" style="display:flex;align-items:center;cursor:pointer;user-select:none;">
                 <input type="checkbox" class="smax-worker-absent" style="display:none;">
@@ -3597,6 +3642,15 @@
             fake.style.background = chk.checked ? '#d32f2f' : 'transparent';
             fake.style.borderColor = chk.checked ? '#d32f2f' : '#64748b';
           });
+
+          // Digits filter
+          const digitsInput = row.querySelector('.smax-worker-digits');
+          if (digitsInput) {
+            digitsInput.addEventListener('input', (e) => {
+              e.target.value = e.target.value.replace(/[^\d,\-]/g, '');
+            });
+          }
+
           if (list) list.appendChild(tempDiv.firstElementChild);
           // Clear search
           searchInput.value = '';
@@ -3613,16 +3667,13 @@
             });
           };
 
+          let searchDebounceTimer = null;
           const renderSearchResults = (term) => {
             const q = (term || '').trim().toUpperCase();
             resultsEl.style.display = q ? 'block' : 'none';
             if (!q) return;
 
-            if (!DataRepository.peopleCache.size) {
-              resultsEl.innerHTML = '<div style="padding:4px;color:#999;font-size:10px;">Carregando...</div>';
-              return;
-            }
-
+            // 1. Local Search first
             const matches = [];
             for (const p of DataRepository.peopleCache.values()) {
               const name = (p.name || '').toUpperCase();
@@ -3633,21 +3684,67 @@
               }
             }
 
-            if (!matches.length) {
-              resultsEl.innerHTML = '<div style="padding:4px;color:#999;font-size:10px;">Nenhum resultado.</div>';
-            } else {
-              resultsEl.innerHTML = matches.map(p => `
-                   <div class="smax-person-pick" data-name="${Utils.escapeHtml(p.name)}" style="padding:3px 6px;cursor:pointer;font-size:10px;border-bottom:1px solid #f5f5f5;">
-                     <strong>${p.name}</strong> ${p.upn ? `<span>(${p.upn})</span>` : ''}
-                   </div>
-                 `).join('');
-              attachPickHandlers();
+            const showMatches = () => {
+              if (!matches.length) {
+                resultsEl.innerHTML = '<div style="padding:6px;color:#94a3b8;font-size:11px;">Buscando no servidor...</div>';
+              } else {
+                resultsEl.innerHTML = matches.map(p => `
+                     <div class="smax-person-pick" data-name="${Utils.escapeHtml(p.name)}" style="padding:6px;cursor:pointer;font-size:11px;border-bottom:1px solid rgba(255,255,255,.05);color:#e2e8f0;transition:background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,.05)';" onmouseout="this.style.background='transparent';">
+                       <strong>${Utils.escapeHtml(p.name)}</strong> ${p.upn ? `<span style="color:#64748b;">(${Utils.escapeHtml(p.upn)})</span>` : ''}
+                     </div>
+                   `).join('');
+                attachPickHandlers();
+              }
+            };
+
+            showMatches();
+
+            // 2. Debounced SMAX fetch
+            if (q.length >= 3) {
+              if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+              searchDebounceTimer = setTimeout(async () => {
+                try {
+                  const res = await ApiClient.request('ems/Person', {
+                    searchParams: {
+                      filter: `PersonalDetails wordstartswith ('${q}')`,
+                      layout: 'Name,Id,Upn,Email,FirstName,LastName,EmployeeNumber,IsVIP,Location',
+                      size: 30
+                    },
+                    includeTenantParam: true
+                  });
+                  if (res && Array.isArray(res.entities)) {
+                    DataRepository.ingestPersonListPayload(res);
+                    const newMatches = [];
+                    for (const p of DataRepository.peopleCache.values()) {
+                      const name = (p.name || '').toUpperCase();
+                      const upn = (p.upn || '').toUpperCase();
+                      if (name.includes(q) || upn.includes(q)) {
+                        newMatches.push(p);
+                        if (newMatches.length >= 20) break;
+                      }
+                    }
+                    if (searchInput.value.trim().toUpperCase() === q) {
+                      if (!newMatches.length) {
+                        resultsEl.innerHTML = '<div style="padding:6px;color:#94a3b8;font-size:11px;">Nenhum resultado.</div>';
+                      } else {
+                        resultsEl.innerHTML = newMatches.map(p => `
+                             <div class="smax-person-pick" data-name="${Utils.escapeHtml(p.name)}" style="padding:6px;cursor:pointer;font-size:11px;border-bottom:1px solid rgba(255,255,255,.05);color:#e2e8f0;transition:background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,.05)';" onmouseout="this.style.background='transparent';">
+                               <strong>${Utils.escapeHtml(p.name)}</strong> ${p.upn ? `<span style="color:#64748b;">(${Utils.escapeHtml(p.upn)})</span>` : ''}
+                             </div>
+                           `).join('');
+                        attachPickHandlers();
+                      }
+                    }
+                  }
+                } catch (err) {
+                  console.warn('[SMAX] Server search failed:', err);
+                }
+              }, 400);
             }
           };
 
           searchInput.addEventListener('input', () => renderSearchResults(searchInput.value));
           searchInput.addEventListener('focus', () => renderSearchResults(searchInput.value));
-          // Hide on blur delayed to allow click
           searchInput.addEventListener('blur', () => setTimeout(() => { resultsEl.style.display = 'none'; }, 200));
         }
 
@@ -3662,47 +3759,19 @@
     const renderPanel = () => {
       if (!container) return;
 
-      // Triador selection UI - friendly and simple
-      const triadorName = prefs.myPersonName || '';
-      const triadorSection = `
-        <div style="margin-top:16px;padding:14px;border-radius:12px;background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);border:1px solid rgba(56,189,248,.2);box-shadow:0 4px 16px rgba(0,0,0,.3);">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-            <span style="font-size:20px;">👤</span>
-            <div>
-              <div style="font-weight:600;color:#38bdf8;font-size:15px;">Quem é você?</div>
-              <div style="font-size:11px;color:#94a3b8;">Seu nome será vinculado aos chamados globais</div>
-            </div>
-          </div>
-          <div style="display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;">
-            <div style="flex:1;position:relative;min-width:200px;">
-              <input type="text" id="smax-triador-search" placeholder="Digite seu nome para buscar..." 
-                style="width:100%;padding:10px 12px;border:1px solid #475569;border-radius:8px;font-size:13px;background:#1e293b;color:#f8fafc;transition:border-color .15s ease,box-shadow .15s ease;box-sizing:border-box;">
-              <div id="smax-triador-results" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:250px;overflow-y:auto;background:#020617;border:1px solid #475569;border-top:none;border-radius:0 0 8px 8px;z-index:100;box-shadow:0 12px 24px rgba(0,0,0,.5);"></div>
-            </div>
-            ${triadorName ? `
-              <div id="smax-triador-current" style="display:flex;align-items:center;padding:8px 14px;background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);border-radius:8px;font-size:12px;color:#fff;font-weight:500;white-space:nowrap;box-shadow:0 4px 12px rgba(34,197,94,.35);flex-shrink:0;">
-                ✓ ${Utils.escapeHtml(triadorName)}
-              </div>
-            ` : `
-              <div id="smax-triador-current" style="display:flex;align-items:center;padding:8px 14px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.4);border-radius:8px;font-size:12px;color:#fca5a5;white-space:nowrap;flex-shrink:0;">
-                ⚠️ Não configurado
-              </div>
-            `}
-          </div>
-        </div>
-      `;
-
       container.innerHTML = `
         ${renderHeader()}
         ${renderTeamsList()}
-        ${triadorSection}
         
         <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;">
           <button type="button" id="smax-log-export-all" style="padding:10px 18px;border-radius:8px;border:1px solid rgba(56,189,248,.2);background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;gap:6px;">
             <span style="font-size:14px;">📊</span> Exportar logs <span style="color:#38bdf8;font-weight:600;">(${ActivityLog.getCount()})</span>
           </button>
-          <button type="button" id="smax-config-toggle-btn" style="padding:10px 18px;border-radius:8px;border:1px solid rgba(56,189,248,.2);background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;gap:6px;">
-            <span style="font-size:14px;">🔧</span> Configuração manual
+          <button type="button" id="smax-config-teams-btn" style="padding:10px 18px;border-radius:8px;border:1px solid rgba(56,189,248,.2);background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;gap:6px;">
+            <span style="font-size:14px;">👥</span> Equipes (Geral)
+          </button>
+          <button type="button" id="smax-config-personal-btn" style="padding:10px 18px;border-radius:8px;border:1px solid rgba(56,189,248,.2);background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;gap:6px;">
+            <span style="font-size:14px;">⚙️</span> Config. Pessoal
           </button>
           <button type="button" id="smax-guide-toggle-btn" style="padding:10px 18px;border-radius:8px;border:1px solid rgba(56,189,248,.2);background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);color:#e5e7eb;font-size:12px;cursor:pointer;transition:all .15s ease;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;gap:6px;">
             <span style="font-size:14px;">📖</span> Guia Rápido
@@ -3710,10 +3779,11 @@
         </div>
 
         <div id="smax-config-editor-panel" style="display:none;margin-top:12px;padding:14px;border-radius:12px;background:rgba(2,6,23,0.85);backdrop-filter:blur(12px);border:1px solid rgba(56,189,248,.2);box-shadow:0 4px 16px rgba(0,0,0,.3);">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <div style="font-size:11px;color:#94a3b8;">Edite o JSON abaixo e clique em Salvar. Copie para enviar a colegas.</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div id="smax-config-title" style="font-size:13px;font-weight:600;color:#38bdf8;">Configuração</div>
             <button type="button" id="smax-config-close-btn" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;" title="Fechar">✕</button>
           </div>
+          <div id="smax-config-desc" style="font-size:11px;color:#94a3b8;margin-bottom:10px;">Edite o JSON abaixo e clique em Salvar. Copie para enviar a colegas.</div>
           <textarea id="smax-config-io-textarea" spellcheck="false"
             style="width:100%;min-height:160px;max-height:400px;resize:vertical;padding:10px 12px;border:1px solid #475569;border-radius:8px;font-size:11px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;background:#1e293b;color:#e2e8f0;line-height:1.5;box-sizing:border-box;transition:border-color .15s ease;"></textarea>
           <div id="smax-config-io-status" style="font-size:11px;color:#94a3b8;min-height:16px;margin:8px 0;"></div>
@@ -3764,17 +3834,18 @@
       }
     };
 
-    // Shareable config keys (no personal identity — meant for team distribution)
-    const CONFIG_KEYS = [
+    // Shareable config keys split between team settings and personal settings
+    const TEAMS_CONFIG_KEYS = ['teamsConfigRaw'];
+    const PERSONAL_CONFIG_KEYS = [
       'nameBadgesOn', 'collapseOn', 'enlargeCommentsOn', 'flagSkullOn',
       'nameGroups', 'ausentes', 'nameColors', 'enableRealWrites',
-      'defaultGlobalChangeId', 'personalFinalsRaw', 'teamsConfigRaw',
-      'globalTickets', 'quickAnswers'
+      'defaultGlobalChangeId', 'personalFinalsRaw', 'globalTickets', 'quickAnswers'
     ];
 
-    const buildConfigJSON = () => {
+    const buildConfigJSON = (mode) => {
       const obj = {};
-      CONFIG_KEYS.forEach(key => {
+      const keys = mode === 'teams' ? TEAMS_CONFIG_KEYS : PERSONAL_CONFIG_KEYS;
+      keys.forEach(key => {
         if (prefs[key] === undefined) return;
         if (key === 'teamsConfigRaw') {
           try { obj.teams = JSON.parse(prefs[key]); } catch { obj.teams = prefs[key]; }
@@ -3791,7 +3862,7 @@
       return JSON.stringify(obj, null, 2);
     };
 
-    const applyConfigJSON = (raw) => {
+    const applyConfigJSON = (raw, mode) => {
       let parsed;
       try {
         parsed = JSON.parse(raw);
@@ -3802,7 +3873,8 @@
         return { ok: false, msg: 'O JSON deve ser um objeto { ... }.' };
       }
       let count = 0;
-      CONFIG_KEYS.forEach(key => {
+      const keys = mode === 'teams' ? TEAMS_CONFIG_KEYS : PERSONAL_CONFIG_KEYS;
+      keys.forEach(key => {
         if (key === 'teamsConfigRaw' && parsed.teams !== undefined) {
           prefs.teamsConfigRaw = typeof parsed.teams === 'string'
             ? parsed.teams
@@ -3827,12 +3899,14 @@
           count++;
         }
       });
-      if (!count) return { ok: false, msg: 'Nenhuma chave de configuração reconhecida.' };
+      if (!count) return { ok: false, msg: 'Nenhuma chave de configuração reconhecida para este modo.' };
       savePrefs();
       TeamsConfig.reload();
       reloadConfig();
       return { ok: true, msg: `${count} configurações aplicadas. ✓` };
     };
+
+    let activeConfigMode = 'teams'; // 'teams' or 'personal'
 
     const wireBottomPanelEvents = () => {
       if (!container) return;
@@ -3841,22 +3915,36 @@
       const logBtn = container.querySelector('#smax-log-export-all');
       if (logBtn) logBtn.addEventListener('click', () => ActivityLog.exportCsv());
 
-      // --- Config editor toggle ---
-      const toggleBtn = container.querySelector('#smax-config-toggle-btn');
+      // --- Config editor toggle buttons ---
+      const teamsConfigBtn = container.querySelector('#smax-config-teams-btn');
+      const personalConfigBtn = container.querySelector('#smax-config-personal-btn');
       const editorPanel = container.querySelector('#smax-config-editor-panel');
       const closeBtn = container.querySelector('#smax-config-close-btn');
       const textarea = container.querySelector('#smax-config-io-textarea');
       const statusEl = container.querySelector('#smax-config-io-status');
       const copyBtn = container.querySelector('#smax-config-copy-btn');
       const saveBtn = container.querySelector('#smax-config-save-btn');
+      const configTitle = container.querySelector('#smax-config-title');
+      const configDesc = container.querySelector('#smax-config-desc');
 
       const setIOStatus = (msg, color = '#94a3b8') => {
         if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color; }
       };
 
-      const openEditor = () => {
+      const openEditor = (mode) => {
         if (!editorPanel || !textarea) return;
-        textarea.value = buildConfigJSON();
+        activeConfigMode = mode;
+        if (configTitle) {
+          configTitle.textContent = mode === 'teams'
+            ? '👥 Configuração de Equipes (Geral)'
+            : '⚙️ Configurações Pessoais';
+        }
+        if (configDesc) {
+          configDesc.textContent = mode === 'teams'
+            ? 'Edite o JSON de equipes e atendentes abaixo. Este JSON é ideal para compartilhar com a equipe.'
+            : 'Edite o JSON de preferências, respostas e chamados globais abaixo. Não compartilhe com terceiros.';
+        }
+        textarea.value = buildConfigJSON(mode);
         editorPanel.style.display = 'block';
         setIOStatus('');
       };
@@ -3865,10 +3953,25 @@
         if (editorPanel) editorPanel.style.display = 'none';
       };
 
-      if (toggleBtn) toggleBtn.addEventListener('click', () => {
-        if (editorPanel && editorPanel.style.display !== 'none') closeEditor();
-        else openEditor();
-      });
+      if (teamsConfigBtn) {
+        teamsConfigBtn.addEventListener('click', () => {
+          if (editorPanel && editorPanel.style.display !== 'none' && activeConfigMode === 'teams') {
+            closeEditor();
+          } else {
+            openEditor('teams');
+          }
+        });
+      }
+
+      if (personalConfigBtn) {
+        personalConfigBtn.addEventListener('click', () => {
+          if (editorPanel && editorPanel.style.display !== 'none' && activeConfigMode === 'personal') {
+            closeEditor();
+          } else {
+            openEditor('personal');
+          }
+        });
+      }
 
       if (closeBtn) closeBtn.addEventListener('click', closeEditor);
 
@@ -3890,7 +3993,7 @@
           if (!textarea) return;
           const raw = (textarea.value || '').trim();
           if (!raw) { setIOStatus('O campo está vazio.', '#fca5a5'); return; }
-          const result = applyConfigJSON(raw);
+          const result = applyConfigJSON(raw, activeConfigMode);
           if (!result.ok) { setIOStatus(result.msg, '#fca5a5'); return; }
           setIOStatus(result.msg, '#4ade80');
           // Re-render to reflect changes
@@ -3917,74 +4020,6 @@
 
     const wirePanelEvents = () => {
       if (!container) return;
-
-      // Triador search logic
-      const triadorSearch = container.querySelector('#smax-triador-search');
-      const triadorResults = container.querySelector('#smax-triador-results');
-      const triadorCurrent = container.querySelector('#smax-triador-current');
-
-      if (triadorSearch && triadorResults && triadorCurrent) {
-        const selectTriador = (personId, personName) => {
-          prefs.myPersonId = personId;
-          prefs.myPersonName = personName;
-          savePrefs();
-          triadorCurrent.textContent = personName || '(Não selecionado)';
-          triadorSearch.value = '';
-          triadorResults.style.display = 'none';
-        };
-
-        const renderTriadorResults = (query) => {
-          const q = (query || '').toUpperCase().trim();
-          if (!q) {
-            triadorResults.style.display = 'none';
-            return;
-          }
-
-          DataRepository.ensurePeopleLoaded();
-          const people = Array.from(DataRepository.peopleCache.values());
-
-          if (!people.length) {
-            triadorResults.innerHTML = '<div style="padding:8px;color:#999;font-size:11px;">Carregando pessoas...</div>';
-            triadorResults.style.display = 'block';
-            return;
-          }
-
-          const matches = people.filter(p =>
-            (p.name || '').toUpperCase().includes(q) ||
-            (p.upn || '').toUpperCase().includes(q)
-          ).slice(0, 10);
-
-          if (!matches.length) {
-            triadorResults.innerHTML = '<div style="padding:8px;color:#999;font-size:11px;">Nenhum resultado.</div>';
-          } else {
-            triadorResults.innerHTML = matches.map(p => `
-              <div class="smax-triador-pick" data-id="${p.id}" data-name="${Utils.escapeHtml(p.name)}" 
-                style="padding:6px 8px;cursor:pointer;font-size:11px;border-bottom:1px solid #f0f0f0;transition:background .1s;">
-                <div style="font-weight:500;">${Utils.escapeHtml(p.name)}</div>
-                <div style="color:#666;font-size:10px;">${Utils.escapeHtml(p.upn || p.id)}</div>
-              </div>
-            `).join('');
-
-            triadorResults.querySelectorAll('.smax-triador-pick').forEach(el => {
-              el.addEventListener('mouseenter', () => { el.style.background = '#f0f9ff'; });
-              el.addEventListener('mouseleave', () => { el.style.background = '#fff'; });
-              el.addEventListener('click', () => {
-                selectTriador(el.dataset.id, el.dataset.name);
-              });
-            });
-          }
-          triadorResults.style.display = 'block';
-        };
-
-        triadorSearch.addEventListener('input', () => renderTriadorResults(triadorSearch.value));
-        triadorSearch.addEventListener('focus', () => {
-          DataRepository.ensurePeopleLoaded();
-          if (triadorSearch.value) renderTriadorResults(triadorSearch.value);
-        });
-        triadorSearch.addEventListener('blur', () => {
-          setTimeout(() => { triadorResults.style.display = 'none'; }, 200);
-        });
-      }
     };
 
     const init = () => {
@@ -4289,6 +4324,23 @@
 
     let globalSearchQuery = '';
     let globalSortField = 'date';
+
+    const collapseDashboards = () => {
+      let changed = false;
+      if (prefs.globalDashboardExpanded) {
+        prefs.globalDashboardExpanded = false;
+        changed = true;
+      }
+      if (prefs.quickAnswersDashboardExpanded) {
+        prefs.quickAnswersDashboardExpanded = false;
+        changed = true;
+      }
+      if (changed) {
+        savePrefs();
+        renderGlobalDashboard();
+        renderQuickAnswersDashboard();
+      }
+    };
 
     const renderGlobalDashboard = () => {
       if (!backdrop) return;
@@ -5182,13 +5234,28 @@
             console.warn('[SMAX] Failed to enforce default CKEditor text color:', err);
           }
         };
+        const attachCkEditorClickListener = () => {
+          try {
+            if (quickReplyEditor && quickReplyEditor.document) {
+              quickReplyEditor.document.on('click', () => {
+                collapseDashboards();
+              });
+            }
+          } catch (err) {
+            console.warn('[SMAX] Failed to attach click listener to CKEditor document:', err);
+          }
+        };
         quickReplyEditor.on('instanceReady', () => {
           enforceDefaultColor();
           quickReplyEditor.setData(quickReplyHtml || '');
           setTimeout(() => syncBaselineFromEditor({ immediate: true }), 60);
+          attachCkEditorClickListener();
           console.info('[SMAX] Editor de resposta rápida pronto e sincronizado.');
         });
-        quickReplyEditor.on('contentDom', enforceDefaultColor);
+        quickReplyEditor.on('contentDom', () => {
+          enforceDefaultColor();
+          attachCkEditorClickListener();
+        });
         quickReplyEditor.on('change', () => {
           handleQuickReplyChange(quickReplyEditor.getData());
         });
@@ -5500,6 +5567,11 @@
 
       if (!triageQueue.length) {
         triageIndex = -1;
+        const titleDisplayEl = backdrop.querySelector('#smax-triage-title-display');
+        if (titleDisplayEl) {
+          titleDisplayEl.textContent = '—';
+          titleDisplayEl.title = 'Nenhum chamado';
+        }
         if (ticketDetailsEl) ticketDetailsEl.innerHTML = '<div style="font-size:14px;color:#e5e7eb;">Nenhum chamado encontrado na lista atual. Verifique o campo "meus finais", logo acima.</div>';
         if (discussionsEl) discussionsEl.innerHTML = '<div class="smax-discussions-placeholder">Nenhuma discussão disponível.</div>';
         statusEl.textContent = personalFinalsSet.size
@@ -5741,6 +5813,33 @@
 
         if (discussionsEl) {
           discussionsEl.innerHTML = buildDiscussionListMarkup(Array.isArray(full.discussions) ? full.discussions : []);
+          const missingIds = [];
+          if (Array.isArray(full.discussions)) {
+            full.discussions.forEach((entry) => {
+              if (entry.submitterPersonId && !DataRepository.peopleCache.has(entry.submitterPersonId)) {
+                missingIds.push(entry.submitterPersonId);
+              }
+            });
+          }
+          if (missingIds.length > 0) {
+            const uniqueMissingIds = [...new Set(missingIds)];
+            const filterStr = `Id in (${uniqueMissingIds.map(id => `'${id}'`).join(',')})`;
+            ApiClient.request('ems/Person', {
+              searchParams: {
+                filter: filterStr,
+                layout: 'Id,Name,Avatar',
+                meta: 'totalCount'
+              },
+              includeTenantParam: true
+            }).then((res) => {
+              if (res && res.entities && res.entities.length) {
+                DataRepository.ingestPersonListPayload(res);
+                discussionsEl.innerHTML = buildDiscussionListMarkup(full.discussions);
+              }
+            }).catch((err) => {
+              console.warn('[SMAX] Failed to fetch missing comment submitters:', err);
+            });
+          }
         }
 
         const solutionHtml = full.solutionHtml != null ? full.solutionHtml : '';
@@ -5755,6 +5854,21 @@
 
         populateTeamsDropdown(suggestedTeamId);
         populateWorkerDropdown(suggestedTeamId, suggestedWorker ? suggestedWorker.name : '');
+
+        // Update ticket title display in header
+        const titleDisplayEl = backdrop.querySelector('#smax-triage-title-display');
+        if (titleDisplayEl) {
+          const displayLabel = full.displayLabel || '';
+          if (displayLabel) {
+            titleDisplayEl.textContent = displayLabel;
+            titleDisplayEl.title = `Título: ${displayLabel}`;
+            titleDisplayEl.style.display = 'block';
+          } else {
+            titleDisplayEl.textContent = 'Sem título';
+            titleDisplayEl.title = 'Título não disponível';
+            titleDisplayEl.style.display = 'none';
+          }
+        }
 
         // Update location display in header
         const locationDisplayEl = backdrop.querySelector('#smax-triage-location-display');
@@ -6067,10 +6181,10 @@
           console.warn('[SMAX] Falha ao gravar alterações:', { results, outcomes });
           setStatus(`SMAX recusou a gravação: ${detailMessage}`, 4000);
           // Log failed activity
-          // Derive assignedTo: if answering, always prioritize myPersonName
+          // Derive assignedTo: if answering, use 'Triador'
           const logAssignedToFailed = props.Solution
-            ? (prefs.myPersonName || '')
-            : (props.ExpertAssignee ? (currentOwnerName || prefs.myPersonName || '') : '');
+            ? 'Triador'
+            : (props.ExpertAssignee ? (currentOwnerName || 'Triador') : '');
           ActivityLog.log({
             ticketId: props.Id,
             assigned: !!props.ExpertAssignee,
@@ -6096,10 +6210,10 @@
             refreshGseSelect();
           }
           // Log successful activity
-          // Derive assignedTo: if answering, always prioritize myPersonName
+          // Derive assignedTo: if answering, use 'Triador'
           const logAssignedTo = props.Solution
-            ? (prefs.myPersonName || '')
-            : (props.ExpertAssignee ? (currentOwnerName || prefs.myPersonName || '') : '');
+            ? 'Triador'
+            : (props.ExpertAssignee ? (currentOwnerName || 'Triador') : '');
           ActivityLog.log({
             ticketId: props.Id,
             assigned: !!props.ExpertAssignee,
@@ -6264,94 +6378,97 @@
       backdrop.innerHTML = `
         <div id="smax-triage-hud-wrapper">
           <div id="smax-triage-hud">
-            <aside id="smax-triage-discussions">
-              <div class="smax-discussions-placeholder">Inicie a triagem para carregar as discussões deste chamado.</div>
-            </aside>
-            <div id="smax-triage-hud-main">
-              <div id="smax-triage-hud-header">
-                <div class="smax-triage-title-bar">
-                  <label id="smax-personal-finals-label" title="Limite os chamados pelos seus dígitos finais">
-                    <input type="text" id="smax-personal-finals-input" placeholder="Finais (0-32)" inputmode="numeric" autocomplete="off" />
-                  </label>
-                  <div id="smax-triage-gse-wrapper" data-state="loading" data-open="false" title="Grupo de suporte">
-                    <button type="button" id="smax-triage-gse-display" disabled>
-                      <span id="smax-triage-gse-display-label">Carregando GSEs...</span>
-                      <span class="smax-triage-gse-chevron">▾</span>
-                    </button>
-                    <div id="smax-triage-gse-dropdown" role="listbox" data-empty="true">
-                      <input type="text" id="smax-triage-gse-filter" placeholder="Filtrar GSE..." autocomplete="off" />
-                      <div class="smax-triage-gse-options" id="smax-triage-gse-options"></div>
-                      <div id="smax-triage-gse-empty">Nenhum GSE disponível.</div>
-                    </div>
-                  </div>
-                  <div id="smax-triage-location-display" data-empty="true" title="Local de divulgação">Sem local</div>
-                  <div id="smax-triage-status-wrapper" class="smax-custom-dropdown-wrapper" data-open="false">
-                    <button type="button" id="smax-triage-status-display" class="smax-custom-dropdown-display smax-triage-status-dropdown" disabled>
-                      <span id="smax-triage-status-label">Carregando...</span>
-                      <span class="smax-custom-chevron">▾</span>
-                    </button>
-                    <div class="smax-custom-dropdown-menu">
-                      <div class="smax-custom-dropdown-options" id="smax-triage-status-options"></div>
-                    </div>
+            <div id="smax-triage-hud-header">
+              <div class="smax-triage-title-bar">
+                <label id="smax-personal-finals-label" title="Limite os chamados pelos seus dígitos finais">
+                  <input type="text" id="smax-personal-finals-input" placeholder="Finais (0-32)" inputmode="numeric" autocomplete="off" />
+                </label>
+                <div id="smax-triage-gse-wrapper" data-state="loading" data-open="false" title="Grupo de suporte">
+                  <button type="button" id="smax-triage-gse-display" disabled>
+                    <span id="smax-triage-gse-display-label">Carregando GSEs...</span>
+                    <span class="smax-triage-gse-chevron">▾</span>
+                  </button>
+                  <div id="smax-triage-gse-dropdown" role="listbox" data-empty="true">
+                    <input type="text" id="smax-triage-gse-filter" placeholder="Filtrar GSE..." autocomplete="off" />
+                    <div class="smax-triage-gse-options" id="smax-triage-gse-options"></div>
+                    <div id="smax-triage-gse-empty">Nenhum GSE disponível.</div>
                   </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;">
-                  <div class="smax-triage-header-nav">
-                    <button type="button" id="smax-triage-prev" disabled aria-label="Chamado anterior" title="Chamado anterior">◂</button>
-                    <span id="smax-triage-nav-counter">0 / 0</span>
-                    <button type="button" id="smax-triage-next" disabled aria-label="Próximo chamado" title="Próximo chamado">▸</button>
+                <div id="smax-triage-title-display" title="Título do chamado">—</div>
+                <div id="smax-triage-location-display" data-empty="true" title="Local de divulgação">Sem local</div>
+                <div id="smax-triage-status-wrapper" class="smax-custom-dropdown-wrapper" data-open="false">
+                  <button type="button" id="smax-triage-status-display" class="smax-custom-dropdown-display smax-triage-status-dropdown" disabled>
+                    <span id="smax-triage-status-label">Carregando...</span>
+                    <span class="smax-custom-chevron">▾</span>
+                  </button>
+                  <div class="smax-custom-dropdown-menu">
+                    <div class="smax-custom-dropdown-options" id="smax-triage-status-options"></div>
                   </div>
-                  <button type="button" class="smax-triage-secondary" id="smax-triage-refresh" title="Sincronizar fila">&#x21bb;</button>
-                  <button type="button" class="smax-triage-secondary" id="smax-triage-close" title="Minimizar triagem">_</button>
                 </div>
               </div>
-              <div id="smax-triage-hud-body">
-                <div id="smax-triage-ticket-details">
-                  <div style="font-size:14px;color:#9ca3af;">Inicie a triagem para carregar um chamado.</div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div class="smax-triage-header-nav">
+                  <button type="button" id="smax-triage-prev" disabled aria-label="Chamado anterior" title="Chamado anterior">◂</button>
+                  <span id="smax-triage-nav-counter">0 / 0</span>
+                  <button type="button" id="smax-triage-next" disabled aria-label="Próximo chamado" title="Próximo chamado">▸</button>
                 </div>
+                <button type="button" class="smax-triage-secondary" id="smax-triage-refresh" title="Sincronizar fila">&#x21bb;</button>
+                <button type="button" class="smax-triage-secondary" id="smax-triage-close" title="Minimizar triagem">_</button>
               </div>
-              <div id="smax-triage-hud-footer">
-                <div class="smax-triage-top-row" style="flex-wrap:nowrap;gap:14px;align-items:center;">
-                  <div class="smax-triage-urg-group">
-                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-low" id="smax-triage-urg-low" disabled>Baixa</button>
-                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-med" id="smax-triage-urg-med" disabled>Média</button>
-                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-high" id="smax-triage-urg-high" disabled>Alta</button>
-                    <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
+            </div>
+            <div id="smax-triage-hud-content">
+              <aside id="smax-triage-discussions">
+                <div class="smax-discussions-placeholder">Inicie a triagem para carregar as discussões deste chamado.</div>
+              </aside>
+              <div id="smax-triage-hud-main">
+                <div id="smax-triage-hud-body">
+                  <div id="smax-triage-ticket-details">
+                    <div style="font-size:14px;color:#9ca3af;">Inicie a triagem para carregar um chamado.</div>
                   </div>
-                  <div style="display:flex;align-items:center;gap:8px;">
-                    <div id="smax-triage-team-wrapper" class="smax-custom-dropdown-wrapper" data-open="false" style="min-width:100px;">
-                      <button type="button" id="smax-triage-team-display" class="smax-custom-dropdown-display" disabled>
-                        <span id="smax-triage-team-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Equipe...</span>
-                        <span class="smax-custom-chevron">▾</span>
-                      </button>
-                      <div class="smax-custom-dropdown-menu">
-                        <div class="smax-custom-dropdown-options" id="smax-triage-team-options"></div>
+                </div>
+                <div id="smax-triage-hud-footer">
+                  <div class="smax-triage-top-row" style="flex-wrap:nowrap;gap:14px;align-items:center;">
+                    <div class="smax-triage-urg-group">
+                      <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-low" id="smax-triage-urg-low" disabled>Baixa</button>
+                      <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-med" id="smax-triage-urg-med" disabled>Média</button>
+                      <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-high" id="smax-triage-urg-high" disabled>Alta</button>
+                      <button type="button" class="smax-triage-secondary smax-triage-chip smax-urg-crit" id="smax-triage-urg-crit" disabled>Crítica</button>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <div id="smax-triage-team-wrapper" class="smax-custom-dropdown-wrapper" data-open="false" style="min-width:100px;">
+                        <button type="button" id="smax-triage-team-display" class="smax-custom-dropdown-display" disabled>
+                          <span id="smax-triage-team-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Equipe...</span>
+                          <span class="smax-custom-chevron">▾</span>
+                        </button>
+                        <div class="smax-custom-dropdown-menu">
+                          <div class="smax-custom-dropdown-options" id="smax-triage-team-options"></div>
+                        </div>
+                      </div>
+                      <div id="smax-triage-worker-wrapper" class="smax-custom-dropdown-wrapper" data-open="false" style="min-width:140px;">
+                        <button type="button" id="smax-triage-worker-display" class="smax-custom-dropdown-display" disabled>
+                          <span id="smax-triage-worker-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Atendente...</span>
+                          <span class="smax-custom-chevron">▾</span>
+                        </button>
+                        <div class="smax-custom-dropdown-menu">
+                          <div class="smax-custom-dropdown-options" id="smax-triage-worker-options"></div>
+                        </div>
                       </div>
                     </div>
-                    <div id="smax-triage-worker-wrapper" class="smax-custom-dropdown-wrapper" data-open="false" style="min-width:140px;">
-                      <button type="button" id="smax-triage-worker-display" class="smax-custom-dropdown-display" disabled>
-                        <span id="smax-triage-worker-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Atendente...</span>
-                        <span class="smax-custom-chevron">▾</span>
-                      </button>
-                      <div class="smax-custom-dropdown-menu">
-                        <div class="smax-custom-dropdown-options" id="smax-triage-worker-options"></div>
-                      </div>
-                    </div>
+                    <input type="text" class="smax-global-input" id="smax-triage-global-id" placeholder="Global ID" inputmode="numeric" autocomplete="off" style="width:100px;" />
+                    <div style="display:none;" id="smax-triage-real-flag"></div>
+                    <div style="display:none;"><input type="checkbox" id="smax-triage-used-script"></div>
+                    <span class="smax-indicator-value" id="smax-triage-assign-value" style="display:none;">Sem dono configurado</span>
+                    <div id="smax-triage-assign-panel" data-state="disabled" style="display:none;"></div>
+                    <div class="smax-global-hint" id="smax-triage-global-hint" style="display:none;"></div>
+                    <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>ENVIAR</button>
                   </div>
-                  <input type="text" class="smax-global-input" id="smax-triage-global-id" placeholder="Global ID" inputmode="numeric" autocomplete="off" style="width:100px;" />
-                  <div style="display:none;" id="smax-triage-real-flag"></div>
-                  <div style="display:none;"><input type="checkbox" id="smax-triage-used-script"></div>
-                  <span class="smax-indicator-value" id="smax-triage-assign-value" style="display:none;">Sem dono configurado</span>
-                  <div id="smax-triage-assign-panel" data-state="disabled" style="display:none;"></div>
-                  <div class="smax-global-hint" id="smax-triage-global-hint" style="display:none;"></div>
-                  <button type="button" class="smax-triage-primary smax-triage-chip" id="smax-triage-commit" disabled>ENVIAR</button>
-                </div>
-                <div id="smax-triage-quickreply-card" data-staged="false">
-                  <textarea id="smax-triage-quickreply-editor" placeholder="Digite aqui sua resposta..."></textarea>
-                </div>
-                <div id="smax-triage-status-row" data-empty="true">
-                  <div id="smax-triage-status">Fila de triagem ainda não inicializada.</div>
-                  <div id="smax-triage-attachment-list" data-state="empty">Sem anexos.</div>
+                  <div id="smax-triage-quickreply-card" data-staged="false">
+                    <textarea id="smax-triage-quickreply-editor" placeholder="Digite aqui sua resposta..."></textarea>
+                  </div>
+                  <div id="smax-triage-status-row" data-empty="true">
+                    <div id="smax-triage-status">Fila de triagem ainda não inicializada.</div>
+                    <div id="smax-triage-attachment-list" data-state="empty">Sem anexos.</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -6413,6 +6530,9 @@
       startBtn.addEventListener('click', openHud);
       backdrop.querySelector('#smax-triage-close').addEventListener('click', closeHud);
       backdrop.addEventListener('click', (event) => {
+        // Auto-collapse side panels on outside click
+        collapseDashboards();
+
         if (event.target === backdrop) {
           closeHud();
           return;
@@ -6523,7 +6643,8 @@
       // ── Global & Quick Answers Dashboards Event Listeners ──
       const toggleGlobaisBtn = backdrop.querySelector('#smax-global-dashboard-tab');
       if (toggleGlobaisBtn) {
-        toggleGlobaisBtn.addEventListener('click', () => {
+        toggleGlobaisBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
           prefs.globalDashboardExpanded = !prefs.globalDashboardExpanded;
           if (prefs.globalDashboardExpanded) {
             prefs.quickAnswersDashboardExpanded = false;
@@ -6536,7 +6657,8 @@
 
       const toggleRespostasBtn = backdrop.querySelector('#smax-quickanswers-dashboard-tab');
       if (toggleRespostasBtn) {
-        toggleRespostasBtn.addEventListener('click', () => {
+        toggleRespostasBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
           prefs.quickAnswersDashboardExpanded = !prefs.quickAnswersDashboardExpanded;
           if (prefs.quickAnswersDashboardExpanded) {
             prefs.globalDashboardExpanded = false;
@@ -6544,6 +6666,20 @@
           savePrefs();
           renderGlobalDashboard();
           renderQuickAnswersDashboard();
+        });
+      }
+
+      const globalDashboardEl = backdrop.querySelector('#smax-triage-global-dashboard');
+      if (globalDashboardEl) {
+        globalDashboardEl.addEventListener('click', (event) => {
+          event.stopPropagation();
+        });
+      }
+
+      const qaDashboardEl = backdrop.querySelector('#smax-triage-quickanswers-dashboard');
+      if (qaDashboardEl) {
+        qaDashboardEl.addEventListener('click', (event) => {
+          event.stopPropagation();
         });
       }
 
