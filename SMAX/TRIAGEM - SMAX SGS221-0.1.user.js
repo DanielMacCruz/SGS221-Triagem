@@ -1653,6 +1653,17 @@
         firstName: 'ROBSON',
         lastName: 'SOUZA ALVES',
         location: '49893064'
+      },
+      {
+        id: '61244734',
+        name: 'RONEY RODRIGO RIBEIRO DOS SANTOS',
+        upn: 'ronsantos',
+        email: 'ronsantos@tjsp.jus.br',
+        isVip: false,
+        employeeNumber: '381730',
+        firstName: 'RONEY',
+        lastName: 'RIBEIRO DOS SANTOS',
+        location: ''
       }
     ];
     const supportGroupMap = new Map();
