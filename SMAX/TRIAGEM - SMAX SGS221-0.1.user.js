@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TRIAGEM - SMAX SGS221
 // @namespace    https://github.com/DanielMacCruz/SGS221-Triagem
-// @version      1.1
+// @version      1.1.1
 // @description  Interface enhancements for triagem workflow
 // @author       YOU
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
@@ -1642,7 +1642,19 @@
     const triageCache = new Map();
     let triageIds = [];
     const peopleCache = new Map();
-    const manualPeopleSeed = [];
+    const manualPeopleSeed = [
+      {
+        id: '95970',
+        name: 'ROBSON SOUZA ALVES',
+        upn: 'robsonalves',
+        email: 'robsonalves@tjsp.jus.br',
+        isVip: false,
+        employeeNumber: '367442',
+        firstName: 'ROBSON',
+        lastName: 'SOUZA ALVES',
+        location: '49893064'
+      }
+    ];
     const supportGroupMap = new Map();
     let supportGroupTotal = null;
     const supportGroupListeners = new Set();
