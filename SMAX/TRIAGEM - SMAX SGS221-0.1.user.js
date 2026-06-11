@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TRIAGEM - SMAX SGS221
 // @namespace    https://github.com/DanielMacCruz/SGS221-Triagem
-// @version      1.1.2
+// @version      1.1.3
 // @description  Interface enhancements for triagem workflow
 // @author       YOU
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
@@ -1642,30 +1642,7 @@
     const triageCache = new Map();
     let triageIds = [];
     const peopleCache = new Map();
-    const manualPeopleSeed = [
-      {
-        id: '95970',
-        name: 'ROBSON SOUZA ALVES',
-        upn: 'robsonalves',
-        email: 'robsonalves@tjsp.jus.br',
-        isVip: false,
-        employeeNumber: '367442',
-        firstName: 'ROBSON',
-        lastName: 'SOUZA ALVES',
-        location: '49893064'
-      },
-      {
-        id: '61244734',
-        name: 'RONEY RODRIGO RIBEIRO DOS SANTOS',
-        upn: 'ronsantos',
-        email: 'ronsantos@tjsp.jus.br',
-        isVip: false,
-        employeeNumber: '381730',
-        firstName: 'RONEY',
-        lastName: 'RIBEIRO DOS SANTOS',
-        location: ''
-      }
-    ];
+    const manualPeopleSeed = [];
     const supportGroupMap = new Map();
     let supportGroupTotal = null;
     const supportGroupListeners = new Set();
@@ -1678,6 +1655,40 @@
         if (!person.email && !person.upn) return;
         if (!peopleCache.has(person.id)) peopleCache.set(person.id, Object.assign({}, person));
       });
+      // Also register configured workers from TeamsConfig to avoid yellow status
+      try {
+        const teams = TeamsConfig.getTeams();
+        teams.forEach(t => {
+          if (t.workers && Array.isArray(t.workers)) {
+            t.workers.forEach(w => {
+              if (w.id && w.name) {
+                const pid = String(w.id);
+                if (!peopleCache.has(pid)) {
+                  let firstName = w.name;
+                  let lastName = '';
+                  const parts = w.name.split(' ');
+                  if (parts.length > 1) {
+                    firstName = parts[0];
+                    lastName = parts.slice(1).join(' ');
+                  }
+                  peopleCache.set(pid, {
+                    id: pid,
+                    name: w.name,
+                    upn: w.upn || '',
+                    email: w.email || '',
+                    firstName,
+                    lastName,
+                    fullName: w.name,
+                    IsVIP: false
+                  });
+                }
+              }
+            });
+          }
+        });
+      } catch (err) {
+        console.warn('[SMAX] Failed to seed workers from TeamsConfig:', err);
+      }
     };
     let peopleTotal = null;
     const queueListeners = new Set();
@@ -3305,6 +3316,9 @@
 
       const workersHtml = (team.workers || []).map((w, idx) => `
         <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;background:rgba(15,23,42,0.6);border:1px solid #475569;padding:8px;border-radius:8px;">
+          <input type="hidden" class="smax-worker-id" value="${Utils.escapeHtml(w.id || '')}">
+          <input type="hidden" class="smax-worker-upn" value="${Utils.escapeHtml(w.upn || '')}">
+          <input type="hidden" class="smax-worker-email" value="${Utils.escapeHtml(w.email || '')}">
           <input type="text" class="smax-worker-name" data-idx="${idx}" value="${Utils.escapeHtml(w.name || '')}" style="flex:1;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Nome do Responsável">
           <input type="text" class="smax-worker-digits" data-idx="${idx}" value="${Utils.escapeHtml(w.digits || '')}" style="width:80px;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Digitos (ex: 0-9)">
           
@@ -3449,6 +3463,9 @@
           // Collect workers
           const newWorkers = [];
           container.querySelectorAll('#smax-workers-list > div').forEach(div => {
+            const idInput = div.querySelector('.smax-worker-id');
+            const upnInput = div.querySelector('.smax-worker-upn');
+            const emailInput = div.querySelector('.smax-worker-email');
             const nameInput = div.querySelector('.smax-worker-name');
             const digitsInput = div.querySelector('.smax-worker-digits');
             const absentInput = div.querySelector('.smax-worker-absent');
@@ -3456,7 +3473,16 @@
               const name = nameInput.value.trim();
               const digits = digitsInput.value.trim();
               const isAbsent = absentInput ? !!absentInput.checked : false;
-              if (name) newWorkers.push({ name, digits, isAbsent });
+              if (name) {
+                newWorkers.push({
+                  id: idInput ? idInput.value.trim() : '',
+                  name,
+                  upn: upnInput ? upnInput.value.trim() : '',
+                  email: emailInput ? emailInput.value.trim() : '',
+                  digits,
+                  isAbsent
+                });
+              }
             }
           });
 
@@ -3638,11 +3664,14 @@
         const searchInput = container.querySelector('#smax-team-person-search');
         const resultsEl = container.querySelector('#smax-team-person-results');
 
-        const addWorkerResult = (name) => {
+        const addWorkerResult = (name, id = '', upn = '', email = '') => {
           const list = container.querySelector('#smax-workers-list');
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = `
             <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;background:rgba(15,23,42,0.6);border:1px solid #475569;padding:8px;border-radius:8px;">
+              <input type="hidden" class="smax-worker-id" value="${id ? Utils.escapeHtml(id) : ''}">
+              <input type="hidden" class="smax-worker-upn" value="${upn ? Utils.escapeHtml(upn) : ''}">
+              <input type="hidden" class="smax-worker-email" value="${email ? Utils.escapeHtml(email) : ''}">
               <input type="text" class="smax-worker-name" value="${name ? Utils.escapeHtml(name) : ''}" style="flex:1;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Nome do Responsável">
               <input type="text" class="smax-worker-digits" value="" style="width:80px;font-size:11px;padding:6px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#f8fafc;" placeholder="Digitos (ex: 0-9)">
               <div class="smax-worker-absent-wrapper" style="display:flex;align-items:center;cursor:pointer;user-select:none;">
@@ -3685,7 +3714,10 @@
             resultsEl.querySelectorAll('.smax-person-pick').forEach(el => {
               el.addEventListener('click', () => {
                 const name = el.getAttribute('data-name');
-                if (name) addWorkerResult(name);
+                const id = el.getAttribute('data-id');
+                const upn = el.getAttribute('data-upn');
+                const email = el.getAttribute('data-email');
+                if (name) addWorkerResult(name, id, upn, email);
               });
             });
           };
@@ -3712,7 +3744,7 @@
                 resultsEl.innerHTML = '<div style="padding:6px;color:#94a3b8;font-size:11px;">Buscando no servidor...</div>';
               } else {
                 resultsEl.innerHTML = matches.map(p => `
-                     <div class="smax-person-pick" data-name="${Utils.escapeHtml(p.name)}" style="padding:6px;cursor:pointer;font-size:11px;border-bottom:1px solid rgba(255,255,255,.05);color:#e2e8f0;transition:background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,.05)';" onmouseout="this.style.background='transparent';">
+                     <div class="smax-person-pick" data-id="${Utils.escapeHtml(p.id)}" data-name="${Utils.escapeHtml(p.name)}" data-upn="${Utils.escapeHtml(p.upn || '')}" data-email="${Utils.escapeHtml(p.email || '')}" style="padding:6px;cursor:pointer;font-size:11px;border-bottom:1px solid rgba(255,255,255,.05);color:#e2e8f0;transition:background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,.05)';" onmouseout="this.style.background='transparent';">
                        <strong>${Utils.escapeHtml(p.name)}</strong> ${p.upn ? `<span style="color:#64748b;">(${Utils.escapeHtml(p.upn)})</span>` : ''}
                      </div>
                    `).join('');
@@ -3751,7 +3783,7 @@
                         resultsEl.innerHTML = '<div style="padding:6px;color:#94a3b8;font-size:11px;">Nenhum resultado.</div>';
                       } else {
                         resultsEl.innerHTML = newMatches.map(p => `
-                             <div class="smax-person-pick" data-name="${Utils.escapeHtml(p.name)}" style="padding:6px;cursor:pointer;font-size:11px;border-bottom:1px solid rgba(255,255,255,.05);color:#e2e8f0;transition:background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,.05)';" onmouseout="this.style.background='transparent';">
+                             <div class="smax-person-pick" data-id="${Utils.escapeHtml(p.id)}" data-name="${Utils.escapeHtml(p.name)}" data-upn="${Utils.escapeHtml(p.upn || '')}" data-email="${Utils.escapeHtml(p.email || '')}" style="padding:6px;cursor:pointer;font-size:11px;border-bottom:1px solid rgba(255,255,255,.05);color:#e2e8f0;transition:background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,.05)';" onmouseout="this.style.background='transparent';">
                                <strong>${Utils.escapeHtml(p.name)}</strong> ${p.upn ? `<span style="color:#64748b;">(${Utils.escapeHtml(p.upn)})</span>` : ''}
                              </div>
                            `).join('');
