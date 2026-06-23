@@ -1,11 +1,7 @@
 // ==UserScript==
 // @name         TRIAGEM - SMAX SGS221
 // @namespace    https://github.com/DanielMacCruz/SGS221-Triagem
-<<<<<<< HEAD
-// @version      1.1.4
-=======
-// @version      1.1.3
->>>>>>> 9df1214f7edf037db7e2b2c820f4deffa2573839
+// @version      1.1.5
 // @description  Interface enhancements for triagem workflow
 // @author       YOU
 // @match        https://suporte.tjsp.jus.br/saw/Requests*
@@ -309,13 +305,13 @@
 
     /* ── HUD Backdrop & Shell ────────────────────────────── */
     #smax-triage-hud-backdrop { position:fixed; inset:0; padding:16px 0 8px; background:rgba(0,0,0,0.6); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); z-index:999997; display:none; align-items:flex-start; justify-content:center; overflow:auto; }
-    #smax-triage-hud-wrapper { position:relative; max-width:1460px; width:99vw; max-height:calc(100vh - 32px); display:flex; align-items:stretch; }
+    #smax-triage-hud-wrapper { position:relative; max-width:1460px; width:99vw; height:calc(100vh - 32px); max-height:calc(100vh - 32px); display:flex; align-items:stretch; }
     #smax-triage-hud {
       position:relative; background:#0a0e1a; color:#e2e8f0;
       border-radius:14px; padding:0; width:100%;
       box-shadow:0 32px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06) inset;
       font-family:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
-      font-size:13px; line-height:1.5;
+      font-size:13.5px; line-height:1.55;
       display:flex; flex-direction:column; gap:0; align-items:stretch; overflow:visible;
       -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
     }
@@ -331,28 +327,28 @@
     #smax-triage-hud-header .smax-triage-title-bar { display:flex; align-items:stretch; gap:0; flex:1; overflow:visible; }
     .smax-triage-header-actions-cell { display:flex !important; align-items:stretch !important; gap:0 !important; }
     .smax-triage-header-nav { display:inline-flex; align-items:center; background:rgba(0,0,0,0.15); border:none; border-right:1px solid rgba(255,255,255,0.12); border-radius:0; padding:0 8px; gap:4px; user-select:none; height:100%; }
-    .smax-triage-header-nav button { width:22px; height:22px; border-radius:50%; border:none; background:transparent; color:rgba(255,255,255,.75); font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .15s ease; }
+    .smax-triage-header-nav button { width:22px; height:22px; border-radius:50%; border:none; background:transparent; color:rgba(255,255,255,.75); font-weight:700; font-size:12.5px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .15s ease; }
     .smax-triage-header-nav button:hover:not(:disabled) { background:rgba(255,255,255,.15); color:#fff; }
     .smax-triage-header-nav button:active:not(:disabled) { transform:scale(0.9); }
     .smax-triage-header-nav button:disabled { opacity:0.2; cursor:not-allowed; }
-    #smax-triage-nav-counter { font-size:12px; font-weight:700; color:#fff; padding:0 6px; min-width:40px; text-align:center; font-family:"Cascadia Code","Fira Code",monospace; }
+    #smax-triage-nav-counter { font-size:12.5px; font-weight:700; color:#fff; padding:0 6px; min-width:40px; text-align:center; font-family:"Cascadia Code","Fira Code",monospace; }
 
     /* Header cells (finals, GSE, title, location, status, refresh, close) */
     #smax-personal-finals-label { display:flex; align-items:stretch; margin:0; }
-    #smax-personal-finals-input { background:rgba(0,0,0,0.15); border:none; border-right:1px solid rgba(255,255,255,0.12); border-radius:0; padding:0 10px; color:#f8fafc; font-size:12px; font-weight:500; min-width:60px; max-width:70px; height:100%; box-sizing:border-box; }
+    #smax-personal-finals-input { background:rgba(0,0,0,0.15); border:none; border-right:1px solid rgba(255,255,255,0.12); border-radius:0; padding:0 10px; color:#f8fafc; font-size:12.5px; font-weight:500; min-width:60px; max-width:70px; height:100%; box-sizing:border-box; }
     #smax-personal-finals-input::placeholder { color:rgba(255,255,255,.5); }
     #smax-personal-finals-input:focus { outline:none; background:rgba(0,0,0,0.25); }
     #smax-triage-gse-wrapper { position:relative; min-width:180px; display:flex; align-items:stretch; }
-    #smax-triage-gse-display { width:100%; border:none; border-right:1px solid rgba(255,255,255,0.12); border-radius:0; background:rgba(0,0,0,0.15); color:#f8fafc; font-size:12px; font-weight:500; height:100%; padding:0 24px 0 10px; text-align:left; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:4px; transition:background .15s ease; box-sizing:border-box; }
+    #smax-triage-gse-display { width:100%; border:none; border-right:1px solid rgba(255,255,255,0.12); border-radius:0; background:rgba(0,0,0,0.15); color:#f8fafc; font-size:12.5px; font-weight:500; height:100%; padding:0 24px 0 10px; text-align:left; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:4px; transition:background .15s ease; box-sizing:border-box; }
     #smax-triage-gse-display:hover:not(:disabled) { background:rgba(0,0,0,0.25); }
     #smax-triage-gse-display:disabled { opacity:0.5; cursor:not-allowed; }
-    .smax-triage-gse-chevron { font-size:11px; color:rgba(255,255,255,.6); transition:transform .15s ease; }
+    .smax-triage-gse-chevron { font-size:11.5px; color:rgba(255,255,255,.6); transition:transform .15s ease; }
     #smax-triage-gse-wrapper[data-open="true"] .smax-triage-gse-chevron { transform:rotate(180deg); }
-    #smax-triage-title-display { font-size:12px; font-weight:600; color:#fff; max-width:320px; min-width:0; flex:1; cursor:default; background:rgba(0,0,0,0.15); border:none; border-right:1px solid rgba(255,255,255,0.12); border-radius:0; padding:0 12px; display:flex; align-items:center; height:100%; box-sizing:border-box; }
-    #smax-triage-location-display { font-size:12px; font-weight:400; color:rgba(255,255,255,.8); max-width:200px; min-width:0; cursor:default; background:rgba(0,0,0,0.15); border:none; border-right:1px solid rgba(255,255,255,0.12); border-radius:0; padding:0 12px; display:flex; align-items:center; height:100%; box-sizing:border-box; }
+    #smax-triage-title-display { font-size:12.5px; font-weight:600; color:#fff; max-width:320px; min-width:0; flex:1; cursor:default; background:rgba(0,0,0,0.15); border:none; border-right:1px solid rgba(255,255,255,0.12); border-radius:0; padding:0 12px; display:flex; align-items:center; height:100%; box-sizing:border-box; }
+    #smax-triage-location-display { font-size:12.5px; font-weight:400; color:rgba(255,255,255,.8); max-width:200px; min-width:0; cursor:default; background:rgba(0,0,0,0.15); border:none; border-right:1px solid rgba(255,255,255,0.12); border-radius:0; padding:0 12px; display:flex; align-items:center; height:100%; box-sizing:border-box; }
     #smax-triage-location-display[data-empty="true"] { color:rgba(255,255,255,.35); font-style:italic; }
     .smax-triage-ellipsis-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; width:100%; }
-    .smax-triage-status-dropdown { font-weight:600; min-width:90px; max-width:150px; height:100%; border:none !important; border-right:1px solid rgba(255,255,255,0.12) !important; border-radius:0 !important; background:rgba(0,0,0,0.15) !important; color:rgba(255,255,255,.9) !important; font-size:12px !important; padding:0 10px !important; display:flex !important; justify-content:space-between !important; align-items:center !important; gap:6px !important; cursor:pointer !important; transition:all .15s ease !important; outline:none !important; }
+    .smax-triage-status-dropdown { font-weight:600; min-width:90px; max-width:150px; height:100%; border:none !important; border-right:1px solid rgba(255,255,255,0.12) !important; border-radius:0 !important; background:rgba(0,0,0,0.15) !important; color:rgba(255,255,255,.9) !important; font-size:12.5px !important; padding:0 10px !important; display:flex !important; justify-content:space-between !important; align-items:center !important; gap:6px !important; cursor:pointer !important; transition:all .15s ease !important; outline:none !important; }
     .smax-triage-status-dropdown:hover:not(:disabled) { background:rgba(0,0,0,0.25) !important; }
     .smax-triage-status-dropdown[data-status="RequestStatusSuspended"] { background-color:rgba(251,191,36,0.2) !important; color:#fde68a !important; }
     .smax-triage-status-dropdown[data-status="RequestStatusActive"],
@@ -366,41 +362,43 @@
     .smax-triage-status-dropdown[data-status="RequestStatusPendingApproval"],
     .smax-triage-status-dropdown[data-status="RequestStatusPendingChange"] { background-color:rgba(251,146,60,0.15) !important; color:#fed7aa !important; }
     .smax-triage-status-dropdown[data-status="RequestStatusClassify"] { background-color:rgba(168,85,247,0.15) !important; color:#e9d5ff !important; }
-    #smax-triage-refresh, #smax-triage-close { border:none !important; border-radius:0 !important; border-right:1px solid rgba(255,255,255,0.12) !important; background:rgba(0,0,0,0.15) !important; color:rgba(255,255,255,.75) !important; height:100% !important; padding:0 12px !important; margin:0 !important; display:flex !important; align-items:center !important; justify-content:center !important; font-size:13px !important; cursor:pointer !important; transition:all .15s ease !important; }
+    #smax-triage-refresh, #smax-triage-close { border:none !important; border-radius:0 !important; border-right:1px solid rgba(255,255,255,0.12) !important; background:rgba(0,0,0,0.15) !important; color:rgba(255,255,255,.75) !important; height:100% !important; padding:0 12px !important; margin:0 !important; display:flex !important; align-items:center !important; justify-content:center !important; font-size:13.5px !important; cursor:pointer !important; transition:all .15s ease !important; }
     #smax-triage-close { border-right:none !important; border-radius:0 14px 0 0 !important; }
     #smax-triage-refresh:hover, #smax-triage-close:hover { background:rgba(0,0,0,0.3) !important; color:#fff !important; }
 
     /* ── Main Layout ──────────────────────────────────────── */
-    #smax-triage-hud-main { display:flex; flex-direction:column; gap:0; flex:1; min-width:0; padding-top:0; }
+    #smax-triage-hud-main { display:flex; flex-direction:column; gap:0; flex:1; min-width:0; padding-top:0; min-height:0; }
     #smax-triage-hud-body { background:transparent; padding:14px 20px; margin:0; flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; border:none; }
     #smax-triage-hud-footer { display:flex; flex-direction:column; gap:0; padding:0; background:transparent; }
 
-    /* ── Ticket Details ──────────────────────────────────── */
+    /* ── Ticket Details ────────────────────────────────────── */
     #smax-triage-ticket-details { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
-    #smax-triage-ticket-details img { max-width:100%; height:auto; display:block; border-radius:6px; margin-top:6px; }
-    .smax-triage-meta-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:13px; color:#94a3b8; }
+    .smax-triage-meta-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:13.5px; color:#94a3b8; }
 
     /* ── Discussions Sidebar ──────────────────────────────── */
     #smax-triage-discussions { width:300px; background:rgba(15,22,41,0.35); border:none; border-right:1px solid rgba(255,255,255,.06); border-radius:0; padding:0 14px; display:flex; flex-direction:column; gap:0; overflow:auto; flex-shrink:0; min-height:0; max-height:100%; }
-    .smax-discussions-placeholder { font-size:13px; color:#64748b; line-height:1.5; padding:16px 0; }
+    .smax-discussions-placeholder { font-size:13.5px; color:#64748b; line-height:1.5; padding:16px 0; }
     .smax-discussion-card { border:none; border-bottom:1px solid rgba(255,255,255,.06); border-radius:0; padding:12px 0; background:transparent; display:flex; flex-direction:column; gap:6px; transition:background .15s ease; }
     .smax-discussion-card:hover { background:rgba(255,255,255,.02); }
     .smax-discussion-card:last-child { border-bottom:none; }
-    .smax-discussion-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; }
-    .smax-discussion-title { font-weight:600; color:#f1f5f9; font-size:13px; }
-    .smax-discussion-privacy { font-size:10px; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.15); color:#94a3b8; font-weight:600; }
+    .smax-discussion-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13.5px; }
+    .smax-discussion-title { font-weight:600; color:#f1f5f9; font-size:14px; }
+    .smax-discussion-privacy { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.15); color:#94a3b8; font-weight:600; }
     .smax-discussion-card[data-privacy="PUBLIC"] .smax-discussion-privacy { background:rgba(96,165,250,.12); border-color:rgba(96,165,250,.35); color:#93c5fd; }
     .smax-discussion-card[data-privacy="INTERNAL"] .smax-discussion-privacy { background:rgba(167,139,250,.1); border-color:rgba(167,139,250,.3); color:#c4b5fd; }
     .smax-discussion-card[data-privacy="EXTERNAL"] .smax-discussion-privacy { background:rgba(52,211,153,.1); border-color:rgba(52,211,153,.3); color:#6ee7b7; }
-    .smax-discussion-body { font-size:13px; color:#cbd5e1; line-height:1.55; max-height:120px; overflow:auto; }
+    .smax-discussion-body { font-size:15px !important; color:#f1f5f9 !important; line-height:1.65 !important; max-height:120px; overflow:auto; }
     .smax-discussion-body p { margin:0 0 5px; }
     .smax-discussion-body p:last-child { margin-bottom:0; }
-    .smax-discussion-meta { font-size:11px; color:#94a3b8; }
+    .smax-discussion-meta { font-size:11.5px; color:#94a3b8; }
+
+    /* ── Ticket Description Readability Override ───────────── */
+    .smax-triage-desc-scroll { font-size:15px !important; line-height:1.7 !important; color:#f1f5f9 !important; }
 
     /* ── Footer Toolbar Row ──────────────────────────────── */
     .smax-triage-top-row { display:flex !important; flex-wrap:nowrap !important; gap:0 !important; align-items:stretch !important; height:38px !important; min-height:38px !important; background:#0f1629 !important; border-top:1px solid rgba(255,255,255,.08) !important; border-bottom:1px solid rgba(255,255,255,.08) !important; padding:0 !important; }
     .smax-triage-urg-group { display:flex !important; flex:1.5 !important; align-items:stretch !important; gap:0 !important; border-right:1px solid rgba(255,255,255,.08) !important; }
-    .smax-triage-urg-group button { flex:1 !important; height:100% !important; border:none !important; border-radius:0 !important; margin:0 !important; background:transparent !important; color:#94a3b8 !important; border-right:1px solid rgba(255,255,255,.05) !important; font-size:12px !important; font-weight:500 !important; display:flex !important; align-items:center !important; justify-content:center !important; cursor:pointer !important; transition:all .15s ease !important; letter-spacing:.02em !important; }
+    .smax-triage-urg-group button { flex:1 !important; height:100% !important; border:none !important; border-radius:0 !important; margin:0 !important; background:transparent !important; color:#94a3b8 !important; border-right:1px solid rgba(255,255,255,.05) !important; font-size:12.5px !important; font-weight:500 !important; display:flex !important; align-items:center !important; justify-content:center !important; cursor:pointer !important; transition:all .15s ease !important; letter-spacing:.02em !important; }
     .smax-triage-urg-group button:last-child { border-right:none !important; }
     .smax-triage-urg-group button:hover:not(:disabled) { background:rgba(255,255,255,.05) !important; color:#e2e8f0 !important; }
     .smax-urg-low[data-active="true"] { background:rgba(251,191,36,0.18) !important; color:#fbbf24 !important; font-weight:700 !important; }
@@ -410,16 +408,16 @@
     .smax-triage-dropdowns-cell { display:flex !important; align-items:stretch !important; gap:0 !important; flex:2.5 !important; border-right:1px solid rgba(255,255,255,.08) !important; }
     #smax-triage-team-wrapper, #smax-triage-worker-wrapper { flex:1 !important; display:flex !important; align-items:stretch !important; min-width:0 !important; position:relative !important; }
     #smax-triage-team-wrapper { border-right:1px solid rgba(255,255,255,.08) !important; }
-    .smax-triage-dropdowns-cell .smax-custom-dropdown-display { width:100% !important; height:100% !important; border:none !important; border-radius:0 !important; background:transparent !important; color:#cbd5e1 !important; font-size:12px !important; padding:0 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important; gap:6px !important; cursor:pointer !important; transition:all .15s ease !important; outline:none !important; }
+    .smax-triage-dropdowns-cell .smax-custom-dropdown-display { width:100% !important; height:100% !important; border:none !important; border-radius:0 !important; background:transparent !important; color:#cbd5e1 !important; font-size:12.5px !important; padding:0 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important; gap:6px !important; cursor:pointer !important; transition:all .15s ease !important; outline:none !important; }
     .smax-triage-dropdowns-cell .smax-custom-dropdown-display:hover:not(:disabled) { background:rgba(255,255,255,.04) !important; color:#f1f5f9 !important; }
     .smax-triage-dropdowns-cell .smax-custom-dropdown-display[data-staged="true"] { background:rgba(52,211,153,.12) !important; color:#34d399 !important; font-weight:600 !important; }
     .smax-triage-dropdowns-cell .smax-custom-dropdown-display[data-staged="false"] { background:rgba(251,191,36,.1) !important; color:#fde68a !important; }
-    #smax-triage-global-id { border:none !important; border-radius:0 !important; background:transparent !important; color:#e2e8f0 !important; font-size:12px !important; width:100px !important; min-width:100px !important; height:100% !important; padding:0 12px !important; border-right:1px solid rgba(255,255,255,.08) !important; box-sizing:border-box !important; }
+    #smax-triage-global-id { border:none !important; border-radius:0 !important; background:transparent !important; color:#e2e8f0 !important; font-size:12.5px !important; width:100px !important; min-width:100px !important; height:100% !important; padding:0 12px !important; border-right:1px solid rgba(255,255,255,.08) !important; box-sizing:border-box !important; }
     #smax-triage-global-id::placeholder { color:#64748b !important; }
     #smax-triage-global-id:focus { background:rgba(255,255,255,.03) !important; outline:none !important; }
     #smax-triage-global-id[data-state="staged"] { background:rgba(52,211,153,.12) !important; color:#34d399 !important; font-weight:600 !important; }
     #smax-triage-global-id[data-state="pending"] { background:rgba(251,191,36,.1) !important; color:#fde68a !important; }
-    #smax-triage-commit { border:none !important; border-radius:0 !important; height:100% !important; margin:0 !important; padding:0 22px !important; font-size:12px !important; font-weight:700 !important; text-transform:uppercase !important; letter-spacing:.06em !important; display:flex !important; align-items:center !important; justify-content:center !important; cursor:pointer !important; transition:all .15s ease !important; flex-shrink:0 !important; background:#059669 !important; color:#f0fdf4 !important; box-shadow:none !important; }
+    #smax-triage-commit { border:none !important; border-radius:0 !important; height:100% !important; margin:0 !important; padding:0 22px !important; font-size:12.5px !important; font-weight:700 !important; text-transform:uppercase !important; letter-spacing:.06em !important; display:flex !important; align-items:center !important; justify-content:center !important; cursor:pointer !important; transition:all .15s ease !important; flex-shrink:0 !important; background:#059669 !important; color:#f0fdf4 !important; box-shadow:none !important; }
     #smax-triage-commit:hover:not(:disabled) { background:#047857 !important; }
     #smax-triage-commit:disabled { background:#151d2e !important; color:#475569 !important; cursor:not-allowed !important; }
     #smax-triage-commit[data-suspended="true"] { background:#d97706 !important; color:#fffbeb !important; }
@@ -428,7 +426,7 @@
     /* ── Quick Reply / CKEditor ───────────────────────────── */
     #smax-triage-quickreply-card { border:none !important; border-radius:0 !important; padding:0 !important; background:#0a0e1a !important; width:100% !important; box-sizing:border-box !important; }
     #smax-triage-quickreply-card[data-staged="true"] { border-top:1px solid rgba(96,165,250,.3) !important; border-bottom:1px solid rgba(96,165,250,.3) !important; }
-    #smax-triage-quickreply-card textarea { width:100%; height:28vh; min-height:150px; max-height:420px; resize:vertical; background:#0a0e1a; color:#e2e8f0; border:none; padding:10px 14px; font-family:"Segoe UI",system-ui,sans-serif; font-size:13px; line-height:1.55; box-sizing:border-box; }
+    #smax-triage-quickreply-card textarea { width:100%; height:28vh; min-height:150px; max-height:420px; resize:vertical; background:#0a0e1a; color:#e2e8f0; border:none; padding:10px 14px; font-family:"Segoe UI",system-ui,sans-serif; font-size:13.5px; line-height:1.55; box-sizing:border-box; }
     #smax-triage-quickreply-card .cke { width:100% !important; max-width:100%; box-sizing:border-box; }
     #smax-triage-quickreply-card .cke_chrome { border:none !important; box-shadow:none !important; }
     /* CKEditor dark integration */
@@ -443,7 +441,7 @@
     #smax-triage-hud .cke_button_icon { filter:invert(0.8) !important; opacity:.85 !important; }
     #smax-triage-hud .cke_button:hover .cke_button_icon { opacity:1 !important; }
     #smax-triage-hud .cke_combo_button { background:transparent !important; border:1px solid rgba(255,255,255,.08) !important; border-radius:4px !important; }
-    #smax-triage-hud .cke_combo_text { color:#94a3b8 !important; font-size:11px !important; }
+    #smax-triage-hud .cke_combo_text { color:#94a3b8 !important; font-size:11.5px !important; }
     #smax-triage-hud .cke_combo_arrow { border-top-color:#64748b !important; }
     #smax-triage-hud .cke_combo_button:hover { border-color:rgba(255,255,255,.15) !important; background:rgba(255,255,255,.04) !important; }
     #smax-triage-hud .cke_contents { background:#0a0e1a !important; height:28vh !important; min-height:150px !important; max-height:420px !important; }
@@ -458,14 +456,31 @@
 
     /* ── Status Bar (bottom) ─────────────────────────────── */
     #smax-triage-status-row { display:flex !important; flex-wrap:wrap !important; align-items:center !important; justify-content:space-between !important; gap:8px !important; padding:8px 16px !important; background:#0f1629 !important; border-top:1px solid rgba(255,255,255,.06) !important; border-radius:0 0 14px 14px !important; margin:0 !important; }
-    #smax-triage-status { font-size:12px; color:#94a3b8; }
+    #smax-triage-status { font-size:12.5px; color:#94a3b8; }
     #smax-triage-status-row[data-empty="true"] #smax-triage-status { color:#64748b; }
-    #smax-triage-attachment-list { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; font-size:11px; color:#94a3b8; min-height:20px; max-width:55%; }
+    #smax-triage-attachment-list { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:4px; font-size:11.5px; color:#94a3b8; min-height:20px; max-width:65%; }
     #smax-triage-attachment-list[data-state="loading"],
     #smax-triage-attachment-list[data-state="empty"],
     #smax-triage-attachment-list[data-state="error"] { display:block; text-align:right; }
-    .smax-attachment-chip { border:1px solid rgba(96,165,250,.3); border-radius:999px; padding:2px 8px; background:transparent; color:#60a5fa; font-size:10px; cursor:pointer; transition:all .15s ease; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .smax-attachment-chip:hover { background:rgba(96,165,250,.12); border-color:#60a5fa; color:#93c5fd; }
+    .smax-attachment-chip {
+      border: none !important;
+      border-radius: 4px !important;
+      padding: 4px 10px !important;
+      background: rgba(255, 255, 255, 0.05) !important;
+      color: #93c5fd !important;
+      font-size: 11.5px !important;
+      font-weight: 500 !important;
+      cursor: pointer !important;
+      transition: all .12s ease !important;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .smax-attachment-chip:hover {
+      background: rgba(96, 165, 250, 0.15) !important;
+      color: #fff !important;
+    }
 
     /* ── Attachment Modal ─────────────────────────────────── */
     #smax-attachment-modal { position:fixed; inset:0; background:rgba(10,14,26,0.94); z-index:1000003; display:none; align-items:center; justify-content:center; padding:30px; }
@@ -524,11 +539,11 @@
     /* ── Settings Panel ──────────────────────────────────── */
     #smax-settings {
       background: #0f1629 !important;
-      line-height: 1.6;
+      line-height: 1.65;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-      letter-spacing: .01em;
+      letter-spacing: .015em;
     }
     #smax-settings *, #smax-settings *::placeholder {
       -webkit-font-smoothing: antialiased;
@@ -544,8 +559,8 @@
       background: #151d2e !important;
       border-color: rgba(255,255,255,.1) !important;
       color: #e2e8f0 !important;
-      font-size: 13px !important;
-      line-height: 1.5;
+      font-size: 13.5px !important;
+      line-height: 1.55;
       border-radius: 6px;
     }
     #smax-settings input:focus,
@@ -556,6 +571,7 @@
     }
     #smax-settings label {
       color: #cbd5e1 !important;
+      font-size: 13.5px !important;
     }
     #smax-settings [style*="font-weight:600"][style*="color:#e5e7eb"],
     #smax-settings [style*="font-weight:600"][style*="color:#38bdf8"] {
@@ -578,7 +594,22 @@
     }
     #smax-settings button {
       font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 13px !important;
     }
+
+    /* Clean overrides for inline font-sizes in settings menu and badges */
+    #smax-config-title { font-size: 14px !important; }
+    #smax-config-desc, #smax-config-io-status { font-size: 12px !important; }
+    #smax-config-close-btn { font-size: 18px !important; }
+    #smax-guide-panel ul { font-size: 13px !important; }
+    .smax-triage-meta-row a { font-size: 13.5px !important; }
+    .smax-indicator-value { font-size: 12.5px !important; }
+    .smax-person-pick { font-size: 12px !important; }
+    .smax-team-item span[style*="font-size:10px"] { font-size: 11px !important; }
+    .smax-person-card-vip, span[style*="background:#fbbf24"][style*="font-size:10px"] { font-size: 11px !important; }
+    span[style*="font-family:'Cascadia Code'"][style*="font-size:12px"] { font-size: 13px !important; }
+    span[style*="color:#475569;font-size:12px"] { font-size: 12.5px !important; }
+    #smax-config-editor-panel textarea { font-size: 12px !important; }
 
     /* ── Person Card Popup ───────────────────────────────── */
     .smax-person-card {
@@ -4941,7 +4972,6 @@
       quickReplyHtml = nextHtml != null ? nextHtml : readQuickReplyHtml();
       updateQuickReplyStageState({ announce: true });
     };
-
 
     const refreshPersonalFinalsSet = () => {
       personalFinalsSet = new Set(Utils.parseDigitRanges(prefs.personalFinalsRaw || ''));
